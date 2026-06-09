@@ -14,7 +14,14 @@ class _EmbeddingsClient(Protocol):
     def embed_documents(self, texts: list[str]) -> list[list[float]]: ...
 
 EMBED_DIM: Final[int] = 1024
-MAX_INPUT_WORDS: Final[int] = 512  # heuristic: ~1 word ≈ 1 token for e5
+# Two-axis truncation against the 512-token hard limit on multilingual-e5.
+# Word-based alone is unreliable for German CVs (compound nouns like
+# "Bundesausbildungsförderungsgesetz" can tokenize to 8+ subwords, pushing
+# the tokens-per-word ratio above 1.8). We additionally cap by character
+# count: e5 averages ~4 chars/token on Latin-script text, so 1800 chars caps
+# at ~450 tokens with ~12% headroom.
+MAX_INPUT_WORDS: Final[int] = 300
+MAX_INPUT_CHARS: Final[int] = 1800
 
 
 class EmbeddingServiceError(Exception):
@@ -54,7 +61,13 @@ class Embedder:
         words = text.split()
         if len(words) > MAX_INPUT_WORDS:
             words = words[:MAX_INPUT_WORDS]
-        return " ".join(words)
+        out = " ".join(words)
+        if len(out) > MAX_INPUT_CHARS:
+            # Cut on a word boundary if possible — avoids handing the
+            # tokenizer a half-word that explodes into many subword tokens.
+            cut = out.rfind(" ", 0, MAX_INPUT_CHARS)
+            out = out[: cut if cut > 0 else MAX_INPUT_CHARS]
+        return out
 
     @staticmethod
     def _validate_vector(vec: Any, context: str = "") -> list[float]:

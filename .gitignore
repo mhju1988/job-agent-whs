@@ -22,3 +22,6 @@ artifacts/*.docx
 # IDE
 .vscode/
 .idea/
+
+# Sprint 2 demo source CV — personal data, keep local
+tests/fixtures/sprint2_demo/source_cv.pdf

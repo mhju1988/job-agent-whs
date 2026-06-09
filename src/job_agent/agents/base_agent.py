@@ -6,6 +6,15 @@ from langchain_openai import ChatOpenAI
 
 from job_agent.config import Settings, get_settings
 
+#: Standard preamble for prompts that must return parseable JSON. Small models
+#: (e.g. Llama-3.1-8B served by GWDG) frequently add explanatory prose around
+#: JSON unless told otherwise. Prepend this to any prompt whose response is
+#: parsed via `json.loads` to keep the contract reliable across the project.
+JSON_ONLY_PREAMBLE = (
+    "Respond with a single JSON object only. "
+    "Do not add any explanation, prose, or markdown code fences.\n\n"
+)
+
 
 class BaseAgent:
     """Wraps a chat model and exposes a single `ask` method.

@@ -1,5 +1,5 @@
 """Tests for ObservabilityStore — Supabase client is mocked."""
-from datetime import timezone, datetime
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
 from job_agent.tools.observability_store import ObservabilityStore
@@ -14,7 +14,7 @@ def _make_ctx(agent: str = "matcher") -> RunContext:
     return RunContext(
         run_id="test-run-uuid",
         agent_name=agent,
-        started_at=datetime(2026, 5, 22, 10, 0, 0, tzinfo=timezone.utc),
+        started_at=datetime(2026, 5, 22, 10, 0, 0, tzinfo=UTC),
     )
 
 

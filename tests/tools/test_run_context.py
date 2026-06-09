@@ -1,14 +1,14 @@
 """Tests for RunContext — no I/O, pure in-process logic."""
-from datetime import timezone
+from datetime import UTC
 
-from job_agent.tools.run_context import RunContext, get_current_run, start_run
+from job_agent.tools.run_context import get_current_run, start_run
 
 
 def test_start_run_sets_context() -> None:
     ctx = start_run("matcher")
     assert get_current_run() is ctx
     assert ctx.agent_name == "matcher"
-    assert ctx.started_at.tzinfo == timezone.utc
+    assert ctx.started_at.tzinfo == UTC
 
 
 def test_start_run_generates_unique_run_ids() -> None:

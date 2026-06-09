@@ -27,21 +27,21 @@ User → Streamlit UI
 ## Sprint deliverables
 
 ### Sprint 1 — Research, Architecture & Scout Agent
-- [ ] Evaluate 3 job sources (one API, one scrape target, one fallback) — write `docs/sources.md`
-- [ ] Legal note: ToS + GDPR — `docs/legal.md`
-- [ ] CrewAI hello-world: 1 agent calls GWDG LLM successfully
-- [ ] Supabase schema + migrations applied
-- [ ] Repo skeleton + CI (ruff, mypy, pytest)
-- [ ] Playwright scraper for 1 site (or API client)
-- [ ] Job extraction → structured `Job` pydantic model
-- [ ] Persist to Supabase; dedupe by URL
-- [ ] 10 jobs fetched end-to-end in tests
+- [x] Evaluate 3 job sources (one API, one scrape target, one fallback) — write `docs/sources.md`
+- [x] Legal note: ToS + GDPR — `docs/legal.md`
+- [x] CrewAI hello-world: 1 agent calls GWDG LLM successfully
+- [x] Supabase schema + migrations applied
+- [x] Repo skeleton + CI (ruff, mypy, pytest)
+- [x] Playwright scraper for 1 site (or API client)
+- [x] Job extraction → structured `Job` pydantic model
+- [x] Persist to Supabase; dedupe by URL
+- [x] 10 jobs fetched end-to-end in tests
 
 ### Sprint 2 — Matcher Agent
-- [ ] CV PDF parser → `Profile` model
-- [ ] Embeddings via GWDG; store in pgvector
-- [ ] Cosine similarity + LLM gap analysis
-- [ ] Top-N ranked jobs with rationale
+- [x] CV PDF parser → `Profile` model
+- [x] Embeddings via GWDG; store in pgvector
+- [x] Cosine similarity + LLM gap analysis
+- [x] Top-N ranked jobs with rationale
 
 ### Sprint 3 — Writer Agent
 - [ ] Cover letter template (Jinja + LLM fill)

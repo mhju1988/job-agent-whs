@@ -51,7 +51,7 @@ class ScoutAgent:
         db: SupabaseClient | None = None,
         normalize_fn: Callable[..., Job] | None = None,
         clients: dict[str, Any] | None = None,
-        obs: "ObservabilityStore | None" = None,
+        obs: ObservabilityStore | None = None,
     ) -> None:
         """Construct with one of two patterns:
 

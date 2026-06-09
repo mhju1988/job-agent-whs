@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import Any, cast
 
 from job_agent.db.client import SupabaseClient
 from job_agent.tools.run_context import RunContext
@@ -34,7 +35,7 @@ class ObservabilityStore:
         status: str,
         error_message: str | None = None,
     ) -> None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         self._db.raw.table("agent_runs").update(
             {
                 "status": status,
@@ -73,7 +74,7 @@ class ObservabilityStore:
             }
         ).execute()
 
-    def fetch_runs(self, limit: int = 100) -> list[dict]:
+    def fetch_runs(self, limit: int = 100) -> list[dict[str, Any]]:
         resp = (
             self._db.raw.table("agent_runs")
             .select("*")
@@ -81,9 +82,9 @@ class ObservabilityStore:
             .limit(limit)
             .execute()
         )
-        return resp.data or []
+        return cast(list[dict[str, Any]], resp.data) if resp.data else []
 
-    def fetch_events_for_run(self, run_id: str) -> list[dict]:
+    def fetch_events_for_run(self, run_id: str) -> list[dict[str, Any]]:
         resp = (
             self._db.raw.table("llm_events")
             .select("*")
@@ -91,4 +92,4 @@ class ObservabilityStore:
             .order("created_at")
             .execute()
         )
-        return resp.data or []
+        return cast(list[dict[str, Any]], resp.data) if resp.data else []

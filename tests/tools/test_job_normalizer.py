@@ -111,10 +111,13 @@ def test_normalize_without_detail_uses_list_description() -> None:
 
 
 def test_normalize_with_detail_prefers_full_description() -> None:
-    """When detail provides ``stellenbeschreibung``, it populates description."""
+    """When detail provides ``stellenangebotsBeschreibung``, it populates description.
+
+    That is the field the live v4 jobdetails endpoint actually returns.
+    """
     detail = {
         "refnr": "10010",
-        "stellenbeschreibung": "We are looking for a senior Python engineer "
+        "stellenangebotsBeschreibung": "We are looking for a senior Python engineer "
         "to lead our backend platform team. 5+ years required.",
     }
     job = normalize_arbeitsagentur(_MIN_LIST_ROW, detail=detail)
@@ -122,16 +125,32 @@ def test_normalize_with_detail_prefers_full_description() -> None:
     assert "senior Python engineer" in job.description
 
 
+def test_normalize_with_detail_legacy_key_still_supported() -> None:
+    """The older ``stellenbeschreibung`` key is kept as a fallback."""
+    detail = {"stellenbeschreibung": "Legacy-keyed description text."}
+    job = normalize_arbeitsagentur(_MIN_LIST_ROW, detail=detail)
+    assert job.description == "Legacy-keyed description text."
+
+
+def test_normalize_with_detail_new_key_wins_over_legacy() -> None:
+    detail = {
+        "stellenangebotsBeschreibung": "New-key text.",
+        "stellenbeschreibung": "Legacy text.",
+    }
+    job = normalize_arbeitsagentur(_MIN_LIST_ROW, detail=detail)
+    assert job.description == "New-key text."
+
+
 def test_normalize_with_detail_blank_description_falls_back_to_none() -> None:
-    """Whitespace-only stellenbeschreibung is ignored (not a real description)."""
-    detail = {"stellenbeschreibung": "   \n  "}
+    """Whitespace-only description is ignored (not a real description)."""
+    detail = {"stellenangebotsBeschreibung": "   \n  "}
     job = normalize_arbeitsagentur(_MIN_LIST_ROW, detail=detail)
     assert job.description is None
 
 
 def test_normalize_dispatcher_forwards_detail() -> None:
     """normalize(source, raw, detail=...) threads detail through to arbeitsagentur."""
-    detail = {"stellenbeschreibung": "Forwarded text"}
+    detail = {"stellenangebotsBeschreibung": "Forwarded text"}
     job = normalize("arbeitsagentur", _MIN_LIST_ROW, detail=detail)
     assert job.description == "Forwarded text"
 

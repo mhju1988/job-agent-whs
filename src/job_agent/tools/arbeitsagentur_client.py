@@ -6,6 +6,7 @@ Uses only stdlib — no httpx/requests.
 
 from __future__ import annotations
 
+import base64
 import json
 import urllib.error
 import urllib.parse
@@ -141,7 +142,9 @@ class ArbeitsagenturClient:
     def fetch_detail(self, ref_nr: str) -> dict[str, Any]:
         """Fetch the full job detail (incl. ``stellenbeschreibung``) for a ref_nr.
 
-        Hits ``/v4/jobdetails/{ref_nr}``. Counts against the same rolling-hour
+        Hits ``/v4/jobdetails/{base64(ref_nr)}``. The endpoint requires the
+        refnr Base64-encoded in the path — a raw refnr returns
+        404 STELLENANGEBOT_NICHT_GEFUNDEN. Counts against the same rolling-hour
         rate limiter as :meth:`search`. Returns the parsed JSON dict.
         """
         if not ref_nr:
@@ -149,8 +152,9 @@ class ArbeitsagenturClient:
 
         self._enforce_rate_limit()
 
-        # ref_nr may contain '/' or other URL-unsafe chars in edge cases.
-        url = f"{self.DETAIL_URL}/{urllib.parse.quote(ref_nr, safe='')}"
+        # Base64 output may contain '+', '/', '=' — quote them for the path.
+        encoded = base64.b64encode(ref_nr.encode("utf-8")).decode("ascii")
+        url = f"{self.DETAIL_URL}/{urllib.parse.quote(encoded, safe='')}"
         req = urllib.request.Request(
             url,
             headers={

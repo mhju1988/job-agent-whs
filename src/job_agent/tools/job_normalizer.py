@@ -13,9 +13,10 @@ def normalize_arbeitsagentur(
     """Map a raw Arbeitsagentur list-response item to a Job.
 
     If ``detail`` is provided (from ``ArbeitsagenturClient.fetch_detail``),
-    its ``stellenbeschreibung`` field overrides the list-API description
-    (which is None for this endpoint). This gives the Matcher real text to
-    embed and score against.
+    its ``stellenangebotsBeschreibung`` field (the key the live v4 endpoint
+    returns; ``stellenbeschreibung`` is kept as a legacy fallback) overrides
+    the list-API description (which is None for this endpoint). This gives
+    the Matcher real text to embed and score against.
     """
     # --- external_id ---
     external_id: str | None = raw_job.get("refnr") or raw_job.get("hashId")
@@ -47,7 +48,9 @@ def normalize_arbeitsagentur(
     # --- description (preferred source: detail endpoint) ---
     description: str | None = None
     if detail is not None:
-        full = detail.get("stellenbeschreibung")
+        full = detail.get("stellenangebotsBeschreibung") or detail.get(
+            "stellenbeschreibung"
+        )
         if isinstance(full, str) and full.strip():
             description = full
 

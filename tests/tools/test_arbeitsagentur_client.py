@@ -184,9 +184,10 @@ def test_fetch_detail_returns_parsed_json() -> None:
     result = client.fetch_detail("10001-XYZ")
 
     assert result == payload
-    # Inspect the Request that urllib actually opened.
+    # Inspect the Request that urllib actually opened. The v4 detail endpoint
+    # requires the refnr Base64-encoded in the path — the raw refnr 404s.
     req: urllib.request.Request = opener.open.call_args.args[0]
-    assert req.full_url.endswith("/v4/jobdetails/10001-XYZ")
+    assert req.full_url.endswith("/v4/jobdetails/MTAwMDEtWFla")
     assert req.headers["X-api-key"] == "jobboerse-jobsuche"
     assert "job-agent" in req.headers["User-agent"]
     assert req.get_method() == "GET"

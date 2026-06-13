@@ -103,7 +103,10 @@ class CVParser:
         raw = strip_json_fences(raw)
 
         try:
-            data = json.loads(raw)
+            # strict=False tolerates literal control characters (raw newlines,
+            # tabs) inside string values — LLMs routinely emit these in
+            # multi-line CV prose instead of escaped "\n".
+            data = json.loads(raw, strict=False)
         except json.JSONDecodeError as exc:
             raise CVParseError(f"LLM returned invalid JSON: {exc}") from exc
 

@@ -102,6 +102,34 @@ def test_parse_strips_plain_code_fence() -> None:
     assert profile.summary == "Experienced developer."
 
 
+def test_parse_tolerates_literal_control_char_in_llm_json() -> None:
+    # German CVs often yield LLM JSON with a LITERAL newline inside a string
+    # value (e.g. a multi-line summary) instead of an escaped "\\n". Default
+    # json.loads (strict=True) rejects it as "Invalid control character".
+    raw = (
+        '{"full_name": "Max Mustermann", '
+        '"summary": "Erfahrener Entwickler.\n'
+        'Schwerpunkt Backend.", '
+        '"skills": ["Python", "SQL"], '
+        '"experience": [], "education": [], '
+        '"languages": ["German"]}'
+    )
+    assert "\n" in raw  # guard: reproduction needs a real control char
+    fake_reader = _make_reader(["CV page text."])
+    mock_agent = MagicMock()
+    mock_agent.ask.return_value = raw
+
+    parser = CVParser(
+        llm_agent=mock_agent,
+        pdf_reader_factory=lambda _path: fake_reader,
+    )
+    profile = parser.parse(Path("dummy.pdf"))
+
+    assert profile.summary is not None
+    assert profile.summary.startswith("Erfahrener Entwickler.")
+    assert "Python" in profile.skills
+
+
 def test_parse_empty_pdf_raises() -> None:
     fake_reader = _make_reader(["", ""])
     mock_agent = MagicMock()

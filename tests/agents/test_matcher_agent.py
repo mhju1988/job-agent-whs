@@ -188,6 +188,28 @@ def test_json_fence_stripped() -> None:
     assert result.errors == []
 
 
+def test_literal_control_char_in_rationale_still_scores() -> None:
+    # German gap-analysis can yield a LITERAL newline inside the "rationale"
+    # string instead of an escaped "\\n". Default json.loads (strict=True)
+    # would reject it and silently drop the job as a parse error.
+    rows = [_make_rpc_row(0)]
+    db = _make_db_mock(rows)
+    raw = (
+        '{"score": 75, "matched_skills": ["Python"], "gaps": ["Docker"], '
+        '"rationale": "Starker Treffer.\n'
+        'Python und SQL passen gut."}'
+    )
+    assert "\n" in raw  # guard: reproduction needs a real control char
+    llm = _make_llm_mock(responses=[raw])
+
+    agent = MatcherAgent(db=db, llm_agent=llm)
+    result = agent.run(PROFILE_ID, top_n=1)
+
+    assert result.scored == 1
+    assert result.persisted == 1
+    assert result.errors == []
+
+
 def test_errors_capped_at_10() -> None:
     """11 bad LLM responses; errors list is capped at 10."""
     rows = [_make_rpc_row(i) for i in range(11)]

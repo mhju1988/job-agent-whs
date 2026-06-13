@@ -111,7 +111,10 @@ class CoverLetterRenderer:
         raw = strip_json_fences(raw)
 
         try:
-            data = json.loads(raw)
+            # strict=False tolerates literal control characters (raw newlines,
+            # tabs) inside string values — LLMs, especially on multi-paragraph
+            # German prose, routinely emit these instead of escaped "\n".
+            data = json.loads(raw, strict=False)
         except json.JSONDecodeError as exc:
             raise CoverLetterError(f"LLM returned invalid JSON: {exc}") from exc
 

@@ -102,6 +102,31 @@ def test_render_strips_json_fence() -> None:
     assert "{{" not in result
 
 
+def test_render_tolerates_literal_control_char_in_llm_json() -> None:
+    # Real LLM output (especially German prose) frequently embeds a LITERAL
+    # newline inside a JSON string value instead of an escaped "\\n". Python's
+    # default json.loads (strict=True) rejects that with
+    # "Invalid control character at ...". The renderer must tolerate it.
+    raw = (
+        '{"opening": "Sehr geehrte Damen und Herren,\n'
+        'ich bewerbe mich um die Ausbildung.", '
+        '"body": "Ich bringe Python und SQL mit.", '
+        '"closing": "Mit freundlichen Gruessen."}'
+    )
+    assert "\n" in raw  # guard: the reproduction needs a real control char
+    renderer, _ = _make_renderer(raw)
+
+    result = renderer.render(
+        candidate_name="Max Mustermann",
+        profile=_make_profile(),
+        job=_make_job(),
+        matched_skills=["Python"],
+    )
+
+    assert "Sehr geehrte Damen und Herren" in result
+    assert "{{" not in result
+
+
 def test_render_invalid_json_raises() -> None:
     renderer, _ = _make_renderer("not json at all")
 

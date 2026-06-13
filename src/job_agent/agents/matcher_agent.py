@@ -181,7 +181,10 @@ class MatcherAgent:
             cleaned = strip_json_fences(raw)
 
             try:
-                data = json.loads(cleaned)
+                # strict=False tolerates literal control characters (raw
+                # newlines) inside string values — LLMs emit these in German
+                # rationale prose instead of escaped "\n".
+                data = json.loads(cleaned, strict=False)
                 match_result = MatchResult.model_validate(data)
             except (json.JSONDecodeError, ValidationError) as exc:
                 if len(errors) < _MAX_ERRORS:

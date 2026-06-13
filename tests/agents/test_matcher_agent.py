@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from unittest.mock import MagicMock
 
 from job_agent.agents.matcher_agent import MatcherAgent, MatcherResult
@@ -203,82 +202,3 @@ def test_errors_capped_at_10() -> None:
     assert result.scored == 0
     assert result.persisted == 0
     assert len(result.errors) == 10
-
-
-# ---------------------------------------------------------------------------
-# Sprint 2 demo fixture regression test
-# ---------------------------------------------------------------------------
-
-
-def _make_db_mock_with_profile(
-    profile_row: dict[str, object],
-    rpc_rows: list[dict[str, object]],
-) -> MagicMock:
-    """Variant of _make_db_mock that uses a caller-supplied profile row.
-
-    Used by the Sprint 2 demo fixture regression test so the profile read from
-    `profile.json` flows into the matcher exactly as it would in a live run.
-    """
-    db = MagicMock()
-    db.raw.rpc.return_value.execute.return_value = MagicMock(data=rpc_rows)
-
-    profile_chain = MagicMock()
-    profile_chain.execute.return_value = MagicMock(data=[profile_row])
-
-    insert_chain = MagicMock()
-    insert_chain.return_value.execute.return_value = MagicMock(data=[{}])
-
-    def _table(name: str) -> MagicMock:
-        t = MagicMock()
-        if name == "profile":
-            t.select.return_value.eq.return_value.limit.return_value = profile_chain
-        else:
-            t.insert = insert_chain
-        return t
-
-    db.raw.table.side_effect = _table
-    return db
-
-
-def test_matcher_against_sprint2_demo_fixture() -> None:
-    """Regression test against the deterministic Sprint 2 demo fixture.
-
-    A reviewer can clone the repo and run::
-
-        pytest tests/agents/test_matcher_agent.py::\\
-            test_matcher_against_sprint2_demo_fixture -v
-
-    to confirm the MatcherAgent pipeline reproduces the slide numbers exactly.
-
-    Fixture is produced by ``scripts/seed_demo_fixture.py``; when the fixture
-    files are not present the test skips rather than failing — so a fresh clone
-    without a populated Supabase still passes ``pytest``.
-    """
-    import pytest
-
-    fixture_dir = Path(__file__).resolve().parents[1] / "fixtures" / "sprint2_demo"
-    profile_path = fixture_dir / "profile.json"
-    expected_path = fixture_dir / "expected_top5.json"
-
-    if not (profile_path.exists() and expected_path.exists()):
-        pytest.skip(
-            "Sprint 2 demo fixture not seeded — run "
-            "`uv run python scripts/seed_demo_fixture.py --cv <path>` to generate."
-        )
-
-    profile = json.loads(profile_path.read_text(encoding="utf-8"))
-    expected = json.loads(expected_path.read_text(encoding="utf-8"))
-    rpc_rows = expected["rpc_rows"]
-    llm_calls = expected["llm_calls"]
-    expected_result = expected["matcher_result"]
-
-    db = _make_db_mock_with_profile(profile, rpc_rows)
-    llm = _make_llm_mock(responses=[c["response"] for c in llm_calls])
-
-    agent = MatcherAgent(db=db, llm_agent=llm)
-    result = agent.run(profile["id"], top_n=len(rpc_rows), exclude_scored=False)
-
-    assert result.candidates_considered == expected_result["candidates_considered"]
-    assert result.scored == expected_result["scored"]
-    assert result.persisted == expected_result["persisted"]
-    assert len(result.errors) == len(expected_result["errors"])

@@ -6,13 +6,21 @@ from pathlib import Path
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Anchor .env to the project root (this file lives at <root>/src/job_agent/config.py),
+# so settings load correctly regardless of the caller's working directory
+# (Streamlit, scripts run from subdirectories, IDEs, etc.).
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+_ENV_FILE = _PROJECT_ROOT / ".env"
+
 
 class MissingCredentialsError(RuntimeError):
     """Raised when live credentials are required but not configured."""
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=_ENV_FILE, env_file_encoding="utf-8", extra="ignore"
+    )
 
     gwdg_api_base: str = Field(default="https://chat-ai.academiccloud.de/v1")
     gwdg_api_key: str = Field(default="")
@@ -21,6 +29,10 @@ class Settings(BaseSettings):
 
     supabase_url: str = Field(default="")
     supabase_key: str = Field(default="")
+
+    # Optional secondary job source (RapidAPI / JSearch). When blank, the
+    # source is disabled and ScoutAgent simply omits it from dispatch.
+    rapidapi_key: str = Field(default="")
 
     log_level: str = Field(default="INFO")
     artifacts_dir: Path = Field(default=Path("./artifacts"))

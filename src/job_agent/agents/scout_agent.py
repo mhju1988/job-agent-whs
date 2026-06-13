@@ -9,12 +9,9 @@ and acts as a DI-friendly unit-testable component.
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from pydantic import BaseModel
-
-if TYPE_CHECKING:
-    from job_agent.tools.observability_store import ObservabilityStore
 
 from job_agent.db.client import SupabaseClient
 from job_agent.models.job import Job
@@ -51,7 +48,6 @@ class ScoutAgent:
         db: SupabaseClient | None = None,
         normalize_fn: Callable[..., Job] | None = None,
         clients: dict[str, Any] | None = None,
-        obs: ObservabilityStore | None = None,
     ) -> None:
         """Construct with one of two patterns:
 
@@ -78,7 +74,6 @@ class ScoutAgent:
         self._normalize: Callable[..., Job] = (
             normalize_fn if normalize_fn is not None else normalize
         )
-        self._obs: ObservabilityStore | None = obs
 
     @staticmethod
     def _extract_raw_list(source: str, raw: Any) -> list[dict[str, Any]]:
@@ -104,37 +99,7 @@ class ScoutAgent:
         page_size: int = 25,
         sources: list[str] | None = None,
     ) -> ScoutResult:
-        """Fetch jobs across all configured sources, normalise, upsert, return summary."""
-        from job_agent.tools.run_context import start_run
-
-        ctx = start_run("scout")
-        if self._obs:
-            self._obs.insert_run(ctx)
-        try:
-            result = self._do_run(
-                keyword=keyword,
-                location=location,
-                page=page,
-                page_size=page_size,
-                sources=sources,
-            )
-            if self._obs:
-                self._obs.finish_run(ctx.run_id, "success")
-            return result
-        except Exception as exc:
-            if self._obs:
-                self._obs.finish_run(ctx.run_id, "error", str(exc)[:500])
-            raise
-
-    def _do_run(
-        self,
-        keyword: str | None = None,
-        location: str | None = None,
-        page: int = 1,
-        page_size: int = 25,
-        sources: list[str] | None = None,
-    ) -> ScoutResult:
-        """Fetch jobs from all sources, normalise, upsert to DB, return summary.
+        """Fetch jobs across all configured sources, normalise, upsert, return summary.
 
         Iterates ``self._clients`` (filtered by ``sources`` if provided), calls
         each ``client.search(...)``, dispatches normalisation with the correct

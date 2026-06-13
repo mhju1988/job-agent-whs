@@ -1,0 +1,20 @@
+{# Datum und Adressblock bewusst weggelassen — werden bei Bedarf beim Export ergänzt. #}
+{{ candidate.name }}
+
+Betreff: Bewerbung als {{ job.title }} bei {{ job.company }}
+
+Sehr geehrte Damen und Herren,
+
+{{ content.opening }}
+
+{{ content.body }}
+{% if matched_skills %}
+Relevante Kompetenzen: {{ matched_skills }}
+{% endif %}
+
+{% if gaps_addressed %}Bereiche, die ich aktiv weiterentwickle: {{ gaps_addressed }}
+{% endif %}
+{{ content.closing }}
+
+Mit freundlichen Grüßen
+{{ profile.full_name or "Ihr Name" }}

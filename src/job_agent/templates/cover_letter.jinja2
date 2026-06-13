@@ -1,0 +1,17 @@
+{# Date and address block intentionally omitted — added at export time if needed. #}
+{{ candidate.name }}
+
+Subject: Application for {{ job.title }} at {{ job.company }}
+
+{{ content.opening }}
+
+{{ content.body }}
+{% if matched_skills %}
+Relevant skills: {{ matched_skills }}
+{% endif %}
+{% if gaps_addressed %}Areas I am actively developing: {{ gaps_addressed }}
+{% endif %}
+{{ content.closing }}
+
+Sincerely,
+{{ profile.full_name or "Your Name" }}

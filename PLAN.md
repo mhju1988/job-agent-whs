@@ -44,16 +44,16 @@ User → Streamlit UI
 - [x] Top-N ranked jobs with rationale
 
 ### Sprint 3 — Writer Agent
-- [ ] Cover letter template (Jinja + LLM fill)
-- [ ] CV variant: re-rank/emphasize skills per job
-- [ ] python-docx export → `/artifacts/`
-- [ ] Quality check pass (no hallucinated experience)
+- [x] Cover letter template (Jinja + LLM fill)
+- [x] CV variant: re-rank/emphasize skills per job
+- [x] python-docx export → `/artifacts/`
+- [x] Quality check pass (no hallucinated experience)
 
 ### Sprint 4 — Tracker & UI
-- [ ] Streamlit dashboard: jobs / matches / applications
-- [ ] Status state machine: new → applied → interview → offer/rejected
-- [ ] Follow-up reminder logic (n days after applied)
-- [ ] Demo script + final README
+- [x] Streamlit dashboard: jobs / matches / applications
+- [x] Status state machine: new → applied → interview → offer/rejected
+- [x] Follow-up reminder logic (n days after applied)
+- [x] Demo script + final README
 
 ## Folder layout
 ```

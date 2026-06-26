@@ -10,6 +10,7 @@ import pytest
 from job_agent.config import MissingCredentialsError
 from job_agent.tools.embedder import (
     EMBED_DIM,
+    MAX_INPUT_CHARS,
     MAX_INPUT_WORDS,
     Embedder,
     EmbeddingServiceError,
@@ -67,6 +68,21 @@ def test_embed_text_truncates_long_input() -> None:
     call_arg: str = client.embed_query.call_args[0][0]
     word_count = len(call_arg.split())
     assert word_count <= MAX_INPUT_WORDS
+
+
+def test_embed_text_caps_by_character_count() -> None:
+    # A real German CV breaches the e5 512-token hard limit well under the
+    # word cap, because compound nouns tokenize into many subwords. Guard
+    # with a character-count cap: an input of few words but many characters
+    # must be truncated by chars, not just by word count.
+    client = make_client(query_return=[0.0] * EMBED_DIM)
+    emb = Embedder(client=client)
+    # 100 "words" of 60 chars each ≈ 6060 chars but only 100 words — well
+    # under any word cap, so only a character cap can shorten this.
+    long_chars = " ".join("x" * 60 for _ in range(100))
+    emb.embed_text(long_chars)
+    call_arg: str = client.embed_query.call_args[0][0]
+    assert len(call_arg) <= MAX_INPUT_CHARS
 
 
 def test_embed_text_wrong_dim_raises() -> None:

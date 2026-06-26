@@ -57,10 +57,23 @@ def test_search_builds_correct_url_and_headers() -> None:
     # Query: "<kw> in <loc>"
     assert "query=Python+Developer+in+Berlin" in req.full_url
     assert "num_pages=1" in req.full_url
+    # Defaults to the German index — JSearch's own default is 'us', which
+    # returns no results for German locations, so 'de' is the project default.
+    assert "country=de" in req.full_url
     # RapidAPI auth headers
     assert req.headers["X-rapidapi-key"] == "test-key-123"
     assert req.headers["X-rapidapi-host"] == "jsearch.p.rapidapi.com"
     assert req.get_method() == "GET"
+
+
+def test_search_country_param_overrides_default() -> None:
+    """An explicit country= overrides the 'de' default in the URL."""
+    opener = _make_opener({"data": []})
+    client = JSearchClient(opener=opener, api_key="k")
+    client.search(keyword="python", country="us")
+    req: urllib.request.Request = opener.open.call_args.args[0]
+    assert "country=us" in req.full_url
+    assert "country=de" not in req.full_url
 
 
 def test_search_empty_inputs_fall_back_to_default_query() -> None:

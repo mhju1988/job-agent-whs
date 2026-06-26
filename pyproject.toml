@@ -13,8 +13,13 @@ dependencies = [
     "pypdf>=4.3",
     "pydantic>=2.8",
     "pydantic-settings>=2.4",
-    "streamlit>=1.40",
     "supabase>=2.7",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "sse-starlette>=2.1",
+    "pyjwt[crypto]>=2.9",
+    "python-multipart>=0.0.9",
+    "reportlab>=4.5.1",
 ]
 
 [dependency-groups]
@@ -38,9 +43,21 @@ artifacts = ["src/job_agent/templates/*.jinja2"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+# Vendored Claude-skill scripts under .claude/ are not project code — don't lint them.
+extend-exclude = [".claude"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "N", "SIM"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI dependency-injection markers are designed to be called in argument
+# defaults; exempt them from B008 (function-call-in-default).
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.File",
+    "fastapi.Header",
+    "fastapi.Query",
+]
 
 [tool.mypy]
 python_version = "3.11"

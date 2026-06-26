@@ -88,12 +88,20 @@ class JSearchClient:
         keyword: str | None = None,
         location: str | None = None,
         num_pages: int = 1,
+        country: str = "de",
     ) -> dict[str, Any]:
         """Search JSearch and return the raw parsed JSON dict.
 
         The query string follows JSearch's convention of
         ``"<keywords> in <location>"``. Empty keyword/location are tolerated
         — the query is built from whatever non-blank parts are given.
+
+        ``country`` is the ISO 3166-1 alpha-2 code (e.g. ``"de"`` for Germany,
+        ``"us"``, ``"gb"``) sent as the ``country`` query param. Defaults to
+        ``"de"`` because JSearch itself defaults to the US index (``us``),
+        which returns no results for German locations like "Berlin" — so we
+        pin the German index to get useful listings for this project. Pass an
+        explicit value to search another country.
         """
         parts: list[str] = []
         if keyword and keyword.strip():
@@ -102,7 +110,11 @@ class JSearchClient:
             parts.append(f"in {location.strip()}")
         query = " ".join(parts) or "developer"  # JSearch requires a non-empty query
 
-        params = {"query": query, "num_pages": str(num_pages)}
+        params = {
+            "query": query,
+            "num_pages": str(num_pages),
+            "country": country,
+        }
         url = f"{self.BASE_URL}?{urllib.parse.urlencode(params)}"
 
         req = urllib.request.Request(

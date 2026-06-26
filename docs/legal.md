@@ -2,7 +2,15 @@
 
 This document captures the legal and ethical constraints for the project. It is read alongside `docs/sources.md` (per-source ToS verdicts) and `CLAUDE.md` (project rules).
 
-Scope: solo university project (W-HS, "Agentic AI"), non-commercial, single-user, Germany-focused, deployed locally only.
+Scope: solo university project (W-HS, "Agentic AI"), non-commercial, Germany-focused, deployed locally only.
+
+> **Multi-user addendum (web redesign).** The project moved from single-user Streamlit to a multi-user web app (Supabase Auth + FastAPI + Next.js). GDPR implications, now in force:
+> - **Roles:** the operator becomes a *controller/processor* of multiple users' personal data (each user's CV/profile, match scores, applications), not just their own. Each authenticated user remains the data subject + controller of their own CV.
+> - **Isolation:** enforced by Postgres **Row-Level Security** (`user_id = auth.uid()` policies) plus explicit `user_id` scoping in every agent write — a user can only ever read/modify their own rows. Jobs are a shared, non-personal global pool.
+> - **Right to erasure (§2.5):** `POST /api/data/delete` → `TrackerAgent.delete_my_data(user_id=…)` deletes **only the caller's** profile, match scores, applications, and artifact files; deleting the Supabase auth user cascades (`ON DELETE CASCADE`) the same rows.
+> - **Retention (§2.4):** the 90-day purge of `jobs`/`match_scores` is unchanged; per-user data is removed on erasure.
+> - **Auth tokens** are verified per request (ES256 via JWKS, or HS256 secret); the per-request DB client is bound to the user's JWT so the database — not just the app — enforces the boundary.
+> - Still **not** hardened for public hosting (no rate-limiting, no abuse controls); intended for local/academic use.
 
 ---
 

@@ -61,3 +61,24 @@ def test_extra_fields_forbidden() -> None:
 def test_source_literal_enforced() -> None:
     with pytest.raises(ValidationError):
         _make_job(source="indeed")
+
+
+def test_to_embedding_text_combines_all_fields() -> None:
+    """Embedding text joins title → company → requirements → description so the
+    job lives in the same embedding space as profiles."""
+    job = _make_job(
+        company="Acme GmbH",
+        requirements=["Python", "SQL"],
+        description="Build data pipelines.",
+    )
+    text = job.to_embedding_text()
+    assert "Software Engineer" in text
+    assert "Acme GmbH" in text
+    assert "Python" in text and "SQL" in text
+    assert "Build data pipelines." in text
+
+
+def test_to_embedding_text_omits_empty_fields() -> None:
+    """Missing optional fields don't leave blank lines in the embedding text."""
+    job = _make_job()  # title only; no company/requirements/description
+    assert job.to_embedding_text() == "Software Engineer"

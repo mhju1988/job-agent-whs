@@ -1,0 +1,308 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Light theme — secondary; the product is dark-first. */
+    --background: 60 24% 98%;
+    --foreground: 240 14% 9%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 14% 9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 14% 9%;
+    --primary: 74 70% 36%;
+    --primary-foreground: 60 30% 98%;
+    --secondary: 240 6% 93%;
+    --secondary-foreground: 240 14% 12%;
+    --muted: 240 6% 93%;
+    --muted-foreground: 240 4% 40%;
+    --accent: 240 6% 93%;
+    --accent-foreground: 240 14% 12%;
+    --destructive: 0 72% 46%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 240 8% 86%;
+    --input: 240 8% 86%;
+    --ring: 74 70% 36%;
+    --radius: 0.8rem;
+
+    --status-new: 240 5% 55%;
+    --status-ready: 212 90% 55%;
+    --status-applied: 265 80% 65%;
+    --status-interview: 32 95% 55%;
+    --status-offer: 142 70% 45%;
+    --status-rejected: 0 75% 58%;
+  }
+
+  .dark {
+    /* Dark theme — the signature look: deep ink canvas, electric-lime accent. */
+    --background: 240 11% 5%;
+    --foreground: 60 6% 95%;
+    --card: 240 9% 8%;
+    --card-foreground: 60 6% 95%;
+    --popover: 240 10% 7%;
+    --popover-foreground: 60 6% 95%;
+    --primary: 74 95% 63%;
+    --primary-foreground: 240 16% 6%;
+    --secondary: 240 6% 13%;
+    --secondary-foreground: 60 6% 95%;
+    --muted: 240 6% 13%;
+    --muted-foreground: 240 5% 64%;
+    --accent: 240 6% 15%;
+    --accent-foreground: 60 6% 96%;
+    --destructive: 0 72% 56%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 240 6% 16%;
+    --input: 240 6% 18%;
+    --ring: 74 95% 63%;
+
+    --status-new: 240 5% 60%;
+    --status-ready: 205 95% 62%;
+    --status-applied: 265 90% 72%;
+    --status-interview: 32 100% 60%;
+    --status-offer: 142 72% 52%;
+    --status-rejected: 0 80% 64%;
+  }
+
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    min-height: 100dvh;
+    -webkit-font-smoothing: antialiased;
+  }
+  /* Accessible, on-brand focus ring for keyboard users. */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+  ::selection {
+    background: hsl(var(--primary) / 0.25);
+    color: hsl(var(--foreground));
+  }
+  /* Subtle dark scrollbar to match the command-center surface. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.5);
+    background-clip: padding-box;
+  }
+  /* Respect motion preferences (a11y). */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  .font-display {
+    font-family: var(--font-display), ui-sans-serif, system-ui, sans-serif;
+  }
+  /* Signature gradient-mesh atmosphere for the dark canvas. */
+  .mesh-atmosphere {
+    background-color: hsl(var(--background));
+    background-image:
+      radial-gradient(40rem 40rem at 12% -8%, hsl(74 95% 63% / 0.10), transparent 60%),
+      radial-gradient(36rem 36rem at 98% 4%, hsl(180 80% 55% / 0.07), transparent 60%),
+      radial-gradient(50rem 50rem at 70% 110%, hsl(265 90% 65% / 0.06), transparent 60%);
+  }
+  /* Electric-lime glow for primary surfaces (CTAs, score rings). */
+  .glow-primary {
+    box-shadow:
+      0 0 0 1px hsl(var(--primary) / 0.25),
+      0 8px 30px -8px hsl(var(--primary) / 0.35);
+  }
+  /* Faint blueprint grid for the command-center backdrop. */
+  .grid-texture {
+    background-image:
+      linear-gradient(to right, hsl(var(--border) / 0.5) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(var(--border) / 0.5) 1px, transparent 1px);
+    background-size: 56px 56px;
+    -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 30%, transparent 75%);
+    mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 30%, transparent 75%);
+  }
+  /* Card that signals interactivity on hover. */
+  .card-interactive {
+    @apply cursor-pointer transition-colors duration-200;
+  }
+  .card-interactive:hover {
+    border-color: hsl(var(--primary) / 0.4);
+    background-color: hsl(var(--card) / 0.9);
+  }
+  /* Subtle film grain overlay (SVG noise). */
+  .grain-overlay::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    pointer-events: none;
+    opacity: 0.035;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Animated drifting gradient blobs — reusable modern background.
+   * Rendered by <AnimatedBackground />. Sits *above* the static
+   * .mesh-atmosphere but *behind* all page content (z-index: -10), never
+   * intercepts pointer events, and freezes under prefers-reduced-motion.
+   *
+   * Customise: tweak the CSS variables below (opacity / blur / speed /
+   * colour) or the per-blob hsl() colours. Higher --blob-opacity /
+   * lower --blob-blur = more intense; larger --blob-speed-* values =
+   * slower, calmer motion.
+   *
+   * Per-page theming: <BackgroundThemeSync /> sets a data-bg="…" attribute
+   * on <html> for the current route, and the [data-bg="…"] rules below
+   * swap --blob-color-1/2/3 (and optionally speed/opacity) per page.
+   * ------------------------------------------------------------------ */
+  .animated-bg {
+    position: fixed;
+    inset: 0;
+    z-index: -10;
+    overflow: hidden;
+    pointer-events: none;
+    /* — customisation knobs (defaults = the signature look) — */
+    --blob-opacity: 0.18;
+    --blob-blur: 80px;
+    --blob-speed-1: 26s;
+    --blob-speed-2: 32s;
+    --blob-speed-3: 38s;
+    --blob-color-1: 74 95% 63%;
+    --blob-color-2: 180 80% 55%;
+    --blob-color-3: 265 90% 65%;
+  }
+  .animated-bg__blob {
+    position: absolute;
+    border-radius: 9999px;
+    filter: blur(var(--blob-blur));
+    opacity: var(--blob-opacity);
+    will-change: transform;
+  }
+  .animated-bg__blob--1 {
+    width: 40rem;
+    height: 40rem;
+    top: -12rem;
+    left: -8rem;
+    background: radial-gradient(circle at center, hsl(var(--blob-color-1)), transparent 65%);
+    animation: blob-drift-1 var(--blob-speed-1) ease-in-out infinite alternate;
+  }
+  .animated-bg__blob--2 {
+    width: 34rem;
+    height: 34rem;
+    top: -8rem;
+    right: -10rem;
+    background: radial-gradient(circle at center, hsl(var(--blob-color-2)), transparent 65%);
+    animation: blob-drift-2 var(--blob-speed-2) ease-in-out infinite alternate;
+  }
+  .animated-bg__blob--3 {
+    width: 46rem;
+    height: 46rem;
+    bottom: -18rem;
+    left: 28%;
+    background: radial-gradient(circle at center, hsl(var(--blob-color-3)), transparent 65%);
+    animation: blob-drift-3 var(--blob-speed-3) ease-in-out infinite alternate;
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Per-route background themes. Each leads with that page's semantic
+   * colour (status / accent hues from .dark) and keeps the others as
+   * complementary tones. Colours are HSL channels consumed via
+   * hsl(var(--blob-color-N)) above.
+   * ------------------------------------------------------------------ */
+  /* / — dashboard: electric-lime command center, energetic. */
+  [data-bg="dashboard"] .animated-bg {
+    --blob-color-1: 74 95% 63%;
+    --blob-color-2: 180 80% 55%;
+    --blob-color-3: 265 90% 65%;
+  }
+  /* /jobs — scouting / search: cool cyan-blue. */
+  [data-bg="jobs"] .animated-bg {
+    --blob-color-1: 205 95% 62%;
+    --blob-color-2: 180 80% 55%;
+    --blob-color-3: 225 85% 62%;
+  }
+  /* /matches — the spark: violet → magenta. */
+  [data-bg="matches"] .animated-bg {
+    --blob-color-1: 265 90% 72%;
+    --blob-color-2: 300 85% 65%;
+    --blob-color-3: 220 80% 60%;
+  }
+  /* /graph — data-viz: lime → cyan → teal, picks up the constellation accent. */
+  [data-bg="graph"] .animated-bg {
+    --blob-color-1: 74 95% 63%;
+    --blob-color-2: 180 80% 55%;
+    --blob-color-3: 165 75% 50%;
+  }
+  /* /applications — warm pipeline: amber → orange. */
+  [data-bg="applications"] .animated-bg {
+    --blob-color-1: 32 100% 60%;
+    --blob-color-2: 18 90% 58%;
+    --blob-color-3: 45 95% 58%;
+  }
+  /* /profile — personal, calm: teal. */
+  [data-bg="profile"] .animated-bg {
+    --blob-color-1: 165 75% 50%;
+    --blob-color-2: 188 70% 52%;
+    --blob-color-3: 150 65% 48%;
+  }
+  /* /observability — quiet, diagnostic: cool slate. */
+  [data-bg="observability"] .animated-bg {
+    --blob-color-1: 215 35% 60%;
+    --blob-color-2: 240 30% 62%;
+    --blob-color-3: 200 40% 58%;
+    --blob-opacity: 0.12;
+  }
+  /* Accessibility: hold the blobs still for motion-sensitive users. */
+  @media (prefers-reduced-motion: reduce) {
+    .animated-bg__blob {
+      animation: none !important;
+    }
+  }
+}
+
+@keyframes blob-drift-1 {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(6rem, 4rem, 0) scale(1.15);
+  }
+}
+@keyframes blob-drift-2 {
+  from {
+    transform: translate3d(0, 0, 0) scale(1.05);
+  }
+  to {
+    transform: translate3d(-5rem, 5rem, 0) scale(0.9);
+  }
+}
+@keyframes blob-drift-3 {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(-4rem, -6rem, 0) scale(1.2);
+  }
+}

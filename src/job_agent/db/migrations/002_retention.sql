@@ -9,8 +9,8 @@
 --     Snapshot fields (job_title, job_company, job_url, job_source) keep the
 --     record meaningful after the parent jobs row is gone.
 --
--- This function should be invoked nightly from application code. We
--- intentionally do NOT use pg_cron here to avoid extension dependencies.
+-- Scheduled nightly via pg_cron in migration 018 (cron job
+-- 'purge-expired-data'). This migration only defines the function.
 
 create or replace function purge_expired_data()
 returns void

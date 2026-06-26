@@ -28,6 +28,7 @@ class Education(BaseModel):
     field: str | None = None
     start: str | None = None
     end: str | None = None
+    description: str | None = None
 
 
 class Profile(BaseModel):
@@ -81,6 +82,8 @@ class Profile(BaseModel):
             line += f" at {edu.institution}"
             if edu.start or edu.end:
                 line += f" ({edu.start or '?'}–{edu.end or 'present'})"
+            if edu.description:
+                line += f": {edu.description}"
             parts.append(line)
 
         if self.languages:

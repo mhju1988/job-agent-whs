@@ -5,6 +5,10 @@ __pycache__/
 .venv/
 venv/
 
+# Build artifacts
+build/
+dist/
+
 # Tooling caches
 .mypy_cache/
 .ruff_cache/
@@ -23,5 +27,33 @@ artifacts/*.docx
 .vscode/
 .idea/
 
-# Sprint 2 demo source CV — personal data, keep local
-tests/fixtures/sprint2_demo/source_cv.pdf
+# Superpowers
+.superpowers/
+
+# Local agent/tool config (machine-specific)
+.claude/settings.local.json
+
+# Personal notebooks & tooling output (not project files)
+.obsidian/
+first vault/
+graphify-out/
+.playwright-cli/
+
+# Vendored agent skill data
+.claude/skills/
+
+# Runtime logs
+logs/
+
+# Windows reserved-name artifact (breaks git stash/checkout if present)
+nul
+
+# Session notes / AI review scratch (local-only, never tracked)
+REVIEW_BACKLOG_HANDOFF.md
+handoff.md
+sprint2handoff.md
+BUILD_PROMPT.md
+claudeReview.md
+gptreview.md
+opencodeRevie.md
+REIMPLEMENTATION_NOTES.md

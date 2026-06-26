@@ -10,6 +10,8 @@ import pytest
 
 from job_agent.agents.writer_agent import WriterAgent, WriterResult
 
+USER_ID = "00000000-0000-0000-0000-0000000000aa"
+
 # ---------------------------------------------------------------------------
 # Fixtures / helpers
 # ---------------------------------------------------------------------------
@@ -60,6 +62,7 @@ def _make_match_row() -> dict:
     return {
         "id": "match-uuid",
         "score": 80,
+        "matched_skills": [],  # empty simulates pre-migration row; caller's list is used
         "gaps": ["AWS"],
         "rationale": "Good fit overall.",
     }
@@ -80,7 +83,11 @@ def _make_db_mock(
 
     def _select_mock(data: list) -> MagicMock:
         t = MagicMock()
+        # Single-eq chain (profile, jobs)
         t.select.return_value.eq.return_value.limit.return_value.execute.return_value.data = data
+        # Double-eq chain (match_scores: .eq("id",...).eq("job_id",...))
+        double_eq = t.select.return_value.eq.return_value.eq.return_value
+        double_eq.limit.return_value.execute.return_value.data = data
         return t
 
     # Build stable per-table mocks
@@ -134,6 +141,7 @@ def test_run_end_to_end_writes_both_docx_and_updates_application(tmp_path: Path)
         match_score_id="match-uuid",
         candidate_name="John Doe",
         matched_skills=["Python", "SQL"],
+        user_id=USER_ID,
     )
 
     # Both files exist
@@ -153,9 +161,10 @@ def test_run_end_to_end_writes_both_docx_and_updates_application(tmp_path: Path)
     upserted_row = upsert_call.args[0]
     assert upserted_row["status"] == "ready_to_send"
     assert upserted_row["job_id"] == "job-uuid"
-    # on_conflict kwarg is essential — without it, re-runs would create
-    # duplicate rows even with migration 007's unique constraint.
-    assert upsert_call.kwargs.get("on_conflict") == "job_id"
+    assert upserted_row["user_id"] == USER_ID
+    # on_conflict is (user_id, job_id) so two users can apply to the same job
+    # without colliding (migration 011 swapped the old UNIQUE(job_id)).
+    assert upsert_call.kwargs.get("on_conflict") == "user_id,job_id"
     # All snapshot fields populated so the application survives the jobs purge.
     for snap in ("job_title", "job_company", "job_url", "job_source"):
         assert snap in upserted_row
@@ -177,6 +186,7 @@ def test_returns_writer_result_with_paths(tmp_path: Path) -> None:
         match_score_id="m1",
         candidate_name="Jane Smith",
         matched_skills=["Python"],
+        user_id=USER_ID,
     )
 
     assert isinstance(result, WriterResult)
@@ -204,6 +214,7 @@ def test_status_set_to_ready_to_send(tmp_path: Path) -> None:
         match_score_id="m1",
         candidate_name="Test",
         matched_skills=[],
+        user_id=USER_ID,
     )
 
     assert result.status == "ready_to_send"
@@ -232,32 +243,35 @@ def test_slug_strips_special_chars(tmp_path: Path) -> None:
         match_score_id="m1",
         candidate_name="Test",
         matched_skills=[],
+        user_id=USER_ID,
     )
 
     cover_name = Path(result.cover_letter_path).name
     cv_name = Path(result.cv_variant_path).name
 
     # Strip prefix and suffix (.docx) to get the slug parts
-    # cover_letter_{company}_{title}.docx
+    # cover_letter_{user_prefix}_{company}_{title}.docx
     cover_stem = cover_name.removeprefix("cover_letter_").removesuffix(".docx")
     cv_stem = cv_name.removeprefix("cv_").removesuffix(".docx")
 
-    # Stem is "{company_slug}_{title_slug}"; split on first _ to get the two parts
+    # Stem is "{user_prefix}_{company_slug}_{title_slug}" — three parts.
     alnum_dash_re = re.compile(r"^[a-z0-9-]+$")
-    cover_parts = cover_stem.split("_", 1)
-    cv_parts = cv_stem.split("_", 1)
+    cover_parts = cover_stem.split("_", 2)
+    cv_parts = cv_stem.split("_", 2)
 
-    assert len(cover_parts) == 2, f"expected company_title in stem: {cover_stem!r}"
-    company_part, title_part = cover_parts
+    assert len(cover_parts) == 3, f"expected user_company_title in stem: {cover_stem!r}"
+    user_part, company_part, title_part = cover_parts
+    assert re.match(r"^[0-9a-f]{8}$", user_part), f"user prefix invalid: {user_part!r}"
     assert alnum_dash_re.match(company_part), f"company slug invalid: {company_part!r}"
     assert alnum_dash_re.match(title_part), f"title slug invalid: {title_part!r}"
     assert len(company_part) <= 40
     assert len(title_part) <= 40
 
     # Same checks on cv stem
-    assert len(cv_parts) == 2
-    assert alnum_dash_re.match(cv_parts[0])
+    assert len(cv_parts) == 3
+    assert re.match(r"^[0-9a-f]{8}$", cv_parts[0])
     assert alnum_dash_re.match(cv_parts[1])
+    assert alnum_dash_re.match(cv_parts[2])
 
 
 def test_missing_profile_raises(tmp_path: Path) -> None:
@@ -276,6 +290,7 @@ def test_missing_profile_raises(tmp_path: Path) -> None:
             match_score_id="m1",
             candidate_name="Test",
             matched_skills=[],
+            user_id=USER_ID,
         )
 
 
@@ -295,6 +310,7 @@ def test_missing_match_raises(tmp_path: Path) -> None:
             match_score_id="nonexistent",
             candidate_name="Test",
             matched_skills=[],
+            user_id=USER_ID,
         )
 
 
@@ -314,4 +330,5 @@ def test_missing_job_raises(tmp_path: Path) -> None:
             match_score_id="m1",
             candidate_name="Test",
             matched_skills=[],
+            user_id=USER_ID,
         )

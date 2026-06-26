@@ -3,9 +3,25 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Callable
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from typing import Any
+
+# Optional progress sink (same DI shape as the obs= sink). Each call receives a
+# small JSON-able dict; the API streams these as SSE events.
+ProgressCb = Callable[[dict[str, Any]], None]
+
+# Optional stop signal (loop->worker bridge, mirroring ProgressCb's worker->loop
+# bridge). Returns True when the run should stop at its next loop boundary.
+StopCb = Callable[[], bool]
+
+
+def emit_progress(cb: ProgressCb | None, **fields: Any) -> None:
+    """Call the progress callback with ``fields`` as a dict, if a sink is set."""
+    if cb is not None:
+        cb(fields)
 
 
 @dataclass

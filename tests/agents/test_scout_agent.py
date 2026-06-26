@@ -313,3 +313,94 @@ def test_scout_run_one_source_failure_does_not_abort_other() -> None:
     assert result.normalized == 1
     assert result.upserted == 1
     assert any("jsearch" in e and "search failed" in e for e in result.errors)
+
+
+# ---------------------------------------------------------------------------
+# Embedding (job vectors for the cosine-match RPC)
+# ---------------------------------------------------------------------------
+
+
+def test_scout_run_stamps_embeddings_when_embedder_provided() -> None:
+    """An injected embedder is called per job; every upserted row carries a vector."""
+    raw_jobs = [_make_raw_job(i) for i in range(3)]
+    client, db = _make_mocks(raw_jobs)
+
+    embedder = MagicMock()
+    embedder.embed_text.return_value = [0.1] * 1024
+
+    agent = ScoutAgent(client=client, db=db, embedder=embedder)
+    agent.run()
+
+    # One embed call per job, fed each job's embedding text.
+    assert embedder.embed_text.call_count == 3
+    texts = [c.args[0] for c in embedder.embed_text.call_args_list]
+    assert all("Software Engineer" in t for t in texts)
+
+    # Every upserted row carries the embedding vector.
+    upserted = db.raw.table.return_value.upsert.call_args.args[0]
+    assert all(row["embedding"] == [0.1] * 1024 for row in upserted)
+
+
+def test_scout_run_without_embedder_omits_embedding() -> None:
+    """No embedder → back-compat: rows upserted without a vector key at all."""
+    raw_jobs = [_make_raw_job(i) for i in range(2)]
+    client, db = _make_mocks(raw_jobs)
+
+    agent = ScoutAgent(client=client, db=db)
+    agent.run()
+
+    upserted = db.raw.table.return_value.upsert.call_args.args[0]
+    assert all("embedding" not in row for row in upserted)
+
+
+def test_scout_should_stop_breaks_inner_and_outer_loops() -> None:
+    """Cancel mid-Arbeitsagentur: stops its remaining jobs (inner break) AND
+    never searches JSearch (outer break); the partial batch is upserted."""
+    raw_aa = [_make_raw_job(i) for i in range(2)]
+    raw_js = [_make_jsearch_raw(i) for i in range(3)]
+
+    aa_client = MagicMock()
+    aa_client.search.return_value = {"stellenangebote": raw_aa}
+    aa_client.fetch_detail.return_value = {"stellenbeschreibung": "AA detail."}
+
+    js_client = MagicMock(spec=["search"])  # no fetch_detail
+    js_client.search.return_value = {"data": raw_js}
+
+    db = MagicMock()
+    db.raw.table.return_value.upsert.return_value.execute.return_value = MagicMock(data=[{}])
+
+    # Checked at the top of the inner loop body (before normalize/fetch_detail)
+    # and at the top of the source loop body: True once 1 detail fetch has run.
+    should_stop = lambda: aa_client.fetch_detail.call_count >= 1  # noqa: E731
+
+    agent = ScoutAgent(clients={"arbeitsagentur": aa_client, "jsearch": js_client}, db=db)
+    result = agent.run(should_stop=should_stop)
+
+    aa_client.search.assert_called_once()
+    js_client.search.assert_not_called()          # outer break stopped source 2
+    assert result.details_fetched == 1            # inner break stopped after job 0
+    assert result.normalized == 1
+    assert result.upserted == 1
+    upserted = db.raw.table.return_value.upsert.call_args.args[0]
+    assert len(upserted) == 1
+
+
+def test_scout_run_embedding_failure_is_non_fatal() -> None:
+    """A failing embed call is logged; the job is still upserted without a vector."""
+    raw_jobs = [_make_raw_job(i) for i in range(2)]
+    client, db = _make_mocks(raw_jobs)
+
+    embedder = MagicMock()
+    embedder.embed_text.side_effect = RuntimeError("endpoint down")
+
+    agent = ScoutAgent(client=client, db=db, embedder=embedder)
+    result = agent.run()
+
+    assert embedder.embed_text.call_count == 2  # both attempted
+    assert result.normalized == 2
+    assert result.upserted == 2  # jobs still upserted
+    assert len(result.errors) == 2
+    assert all("embed failed" in e and "endpoint down" in e for e in result.errors)
+
+    upserted = db.raw.table.return_value.upsert.call_args.args[0]
+    assert all("embedding" not in row for row in upserted)

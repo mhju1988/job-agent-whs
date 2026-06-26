@@ -69,6 +69,7 @@ def test_insert_llm_event_computes_cost() -> None:
         prompt_tokens=1000,
         completion_tokens=500,
         duration_ms=120,
+        provider="nim",
     )
 
     insert_call = mock_db.raw.table.return_value.insert.call_args
@@ -78,6 +79,7 @@ def test_insert_llm_event_computes_cost() -> None:
     assert row["completion_tokens"] == 500
     expected_cost = 1000 * _PROMPT_RATE + 500 * _COMPLETION_RATE
     assert abs(row["estimated_cost_eur"] - expected_cost) < 1e-9
+    assert row["provider"] == "nim"
 
 
 def test_insert_llm_event_handles_none_tokens() -> None:
@@ -97,3 +99,4 @@ def test_insert_llm_event_handles_none_tokens() -> None:
     row = insert_call[0][0]
     assert row["prompt_tokens"] is None
     assert row["estimated_cost_eur"] is None
+    assert row["provider"] == "gwdg"

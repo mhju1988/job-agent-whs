@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from typing import Any, cast
 
 from job_agent.db.client import SupabaseClient
 from job_agent.tools.run_context import RunContext
+
+log = logging.getLogger(__name__)
 
 # Reference: Llama-3.3-70B on Groq (closest public proxy for GWDG cost)
 _PROMPT_EUR_PER_TOKEN = 0.0006 / 1000
@@ -19,15 +22,19 @@ class ObservabilityStore:
     def __init__(self, db: SupabaseClient | None = None) -> None:
         self._db = db if db is not None else SupabaseClient()
 
-    def insert_run(self, ctx: RunContext) -> None:
-        self._db.raw.table("agent_runs").insert(
-            {
-                "run_id": ctx.run_id,
-                "agent_name": ctx.agent_name,
-                "started_at": ctx.started_at.isoformat(),
-                "status": "running",
-            }
-        ).execute()
+    def insert_run(self, ctx: RunContext, user_id: str | None = None) -> None:
+        row: dict[str, Any] = {
+            "run_id": ctx.run_id,
+            "agent_name": ctx.agent_name,
+            "started_at": ctx.started_at.isoformat(),
+            "status": "running",
+        }
+        if user_id is not None:
+            row["user_id"] = user_id
+        try:
+            self._db.raw.table("agent_runs").insert(row).execute()
+        except Exception as exc:  # noqa: BLE001
+            log.warning("observability insert_run failed (migration pending?): %s", exc)
 
     def finish_run(
         self,
@@ -36,13 +43,16 @@ class ObservabilityStore:
         error_message: str | None = None,
     ) -> None:
         now = datetime.now(UTC)
-        self._db.raw.table("agent_runs").update(
-            {
-                "status": status,
-                "finished_at": now.isoformat(),
-                "error_message": error_message,
-            }
-        ).eq("run_id", run_id).execute()
+        try:
+            self._db.raw.table("agent_runs").update(
+                {
+                    "status": status,
+                    "finished_at": now.isoformat(),
+                    "error_message": error_message,
+                }
+            ).eq("run_id", run_id).execute()
+        except Exception as exc:  # noqa: BLE001
+            log.warning("observability finish_run failed: %s", exc)
 
     def insert_llm_event(
         self,
@@ -53,6 +63,7 @@ class ObservabilityStore:
         prompt_tokens: int | None,
         completion_tokens: int | None,
         duration_ms: int,
+        provider: str = "gwdg",
     ) -> None:
         if prompt_tokens is not None and completion_tokens is not None:
             cost = (
@@ -62,17 +73,21 @@ class ObservabilityStore:
         else:
             cost = None
 
-        self._db.raw.table("llm_events").insert(
-            {
-                "run_id": run_id,
-                "prompt_snippet": prompt_snippet,
-                "response_snippet": response_snippet,
-                "prompt_tokens": prompt_tokens,
-                "completion_tokens": completion_tokens,
-                "estimated_cost_eur": cost,
-                "duration_ms": duration_ms,
-            }
-        ).execute()
+        try:
+            self._db.raw.table("llm_events").insert(
+                {
+                    "run_id": run_id,
+                    "prompt_snippet": prompt_snippet,
+                    "response_snippet": response_snippet,
+                    "prompt_tokens": prompt_tokens,
+                    "completion_tokens": completion_tokens,
+                    "estimated_cost_eur": cost,
+                    "duration_ms": duration_ms,
+                    "provider": provider,
+                }
+            ).execute()
+        except Exception as exc:  # noqa: BLE001
+            log.warning("observability insert_llm_event failed: %s", exc)
 
     def fetch_runs(self, limit: int = 100) -> list[dict[str, Any]]:
         resp = (
@@ -82,7 +97,7 @@ class ObservabilityStore:
             .limit(limit)
             .execute()
         )
-        return cast(list[dict[str, Any]], resp.data) if resp.data else []
+        return cast("list[dict[str, Any]]", resp.data or [])
 
     def fetch_events_for_run(self, run_id: str) -> list[dict[str, Any]]:
         resp = (
@@ -92,4 +107,4 @@ class ObservabilityStore:
             .order("created_at")
             .execute()
         )
-        return cast(list[dict[str, Any]], resp.data) if resp.data else []
+        return cast("list[dict[str, Any]]", resp.data or [])

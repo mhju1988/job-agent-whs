@@ -40,3 +40,19 @@ def test_get_settings_returns_settings_instance(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     get_settings.cache_clear()
     assert isinstance(get_settings(), Settings)
+
+
+def test_settings_has_supabase_anon_key(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SUPABASE_ANON_KEY", "anon-xyz")
+    s = Settings()
+    assert s.supabase_anon_key == "anon-xyz"
+
+
+def test_settings_has_jwt_secret_and_cors(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", "super-secret")
+    monkeypatch.setenv("CORS_ORIGINS", "http://localhost:3000,https://app.example")
+    s = Settings()
+    assert s.supabase_jwt_secret == "super-secret"
+    assert s.cors_origins == ["http://localhost:3000", "https://app.example"]

@@ -6,7 +6,7 @@ Built as four CrewAI-style agents (Scout · Matcher · Writer · Tracker) over S
 
 **[▶ Project website](https://mhju1988.github.io/job-agent-whs/)** · **[Pitch deck (PDF)](docs/pitch_deck.pdf)** · **[Deployment guide](DEPLOY.md)**
 
-> **Product walkthrough (2–3 min):** _screencast link goes here once recorded._
+> **▶ [Watch the product walkthrough (screencast)](https://github.com/mhju1988/job-agent-whs/releases/download/final/job-agent-walkthrough.mp4)** — the whole loop end to end: upload CV → Scout → Matcher → Writer → Tracker, with the human keeping the Apply click. _(Also on the [release page](https://github.com/mhju1988/job-agent-whs/releases/tag/final).)_
 
 ---
 

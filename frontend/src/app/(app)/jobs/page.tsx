@@ -1,13 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "motion/react";
 import { Briefcase, Search, Sparkles, Target, X } from "lucide-react";
 import { toast } from "sonner";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import { lastKJobIds } from "@/lib/job-utils";
+import { useSelection } from "@/lib/use-selection";
 import { useRun } from "@/components/run-drawer";
+import { BulkActionBar } from "@/components/bulk-action-bar";
 import {
   filterJobs,
   sortJobs,
@@ -23,6 +25,7 @@ import {
 import type { JobWithScore } from "@/lib/types";
 import { PageHeader } from "@/components/page-header";
 import { JobCard } from "@/components/job-card";
+import { HiddenJobsView } from "@/components/hidden-jobs-view";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -46,6 +49,38 @@ type DepthLabel = (typeof DEPTH)[number]["label"];
 
 export default function JobsPage() {
   const run = useRun();
+  const qc = useQueryClient();
+  const sel = useSelection();
+  const [view, setView] = useState<"active" | "hidden">("active");
+
+  const invalidateJobViews = () => {
+    qc.invalidateQueries({ queryKey: ["jobs"] });
+    qc.invalidateQueries({ queryKey: ["matches"] });
+    qc.invalidateQueries({ queryKey: ["hidden-jobs"] });
+  };
+
+  const unhide = useMutation({
+    mutationFn: (ids: string[]) => api.unhideJobs(ids),
+    onSuccess: invalidateJobViews,
+  });
+
+  const hide = useMutation({
+    mutationFn: (ids: string[]) => api.hideJobs(ids),
+    onSuccess: (_d, ids) => {
+      invalidateJobViews();
+      toast.success(`${ids.length} ${ids.length === 1 ? "job" : "jobs"} hidden`, {
+        action: { label: "Undo", onClick: () => unhide.mutate(ids) },
+      });
+    },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : "Hide failed"),
+  });
+
+  const handleHideOne = (jobId: string) => hide.mutate([jobId]);
+  const handleHideSelected = () => {
+    const ids = Array.from(sel.selected);
+    sel.exit();
+    hide.mutate(ids);
+  };
 
   const { data: jobs = [], isLoading: jobsLoading } = useQuery({
     queryKey: ["jobs"],
@@ -54,6 +89,10 @@ export default function JobsPage() {
   const { data: matches = [] } = useQuery({
     queryKey: ["matches"],
     queryFn: () => api.getMatches(0),
+  });
+  const { data: hiddenJobs = [] } = useQuery({
+    queryKey: ["hidden-jobs"],
+    queryFn: api.getHiddenJobs,
   });
   const { data: me } = useQuery({ queryKey: ["me"], queryFn: api.getMe });
   const hasProfile = !!me?.has_profile;
@@ -175,6 +214,36 @@ export default function JobsPage() {
         title="Jobs"
         description="Search for listings, then score them against your CV."
       />
+
+      {(hiddenJobs.length > 0 || view === "hidden") && (
+        <div className="mb-4 flex w-fit rounded-md border border-border/60 bg-muted/30">
+          <button
+            onClick={() => setView("active")}
+            className={`px-3 py-1.5 text-xs font-medium transition-colors first:rounded-l-[calc(theme(borderRadius.md)-1px)] ${
+              view === "active"
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Active jobs
+          </button>
+          <button
+            onClick={() => setView("hidden")}
+            className={`px-3 py-1.5 text-xs font-medium transition-colors last:rounded-r-[calc(theme(borderRadius.md)-1px)] ${
+              view === "hidden"
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Hidden{hiddenJobs.length > 0 ? ` (${hiddenJobs.length})` : ""}
+          </button>
+        </div>
+      )}
+
+      {view === "hidden" ? (
+        <HiddenJobsView />
+      ) : (
+        <>
 
       {suggestions.length > 0 && (
         <div className="mb-4">
@@ -413,6 +482,13 @@ export default function JobsPage() {
                   Score last {lastK}
                 </Button>
               </div>
+              <Button
+                size="sm"
+                variant={sel.mode ? "secondary" : "outline"}
+                onClick={() => (sel.mode ? sel.exit() : sel.enter())}
+              >
+                {sel.mode ? "Done" : "Select"}
+              </Button>
             </div>
           </div>
         </div>
@@ -457,10 +533,27 @@ export default function JobsPage() {
                 scoring={scoringJobId === job.id}
                 disabled={isRunning}
                 onScore={handleScoreOne}
+                selectMode={sel.mode}
+                selected={sel.isSelected(job.id)}
+                onToggleSelect={sel.toggle}
+                onHide={handleHideOne}
               />
             ))}
           </AnimatePresence>
         </motion.div>
+      )}
+      {sel.mode && (
+        <BulkActionBar
+          count={sel.count}
+          actionLabel={`Hide ${sel.count}`}
+          destructive
+          onAction={handleHideSelected}
+          onSelectAll={() => sel.selectAll(visibleJobs.map((j) => j.id))}
+          onCancel={sel.exit}
+          disabled={hide.isPending}
+        />
+      )}
+        </>
       )}
     </div>
   );

@@ -1,17 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Sparkles } from "lucide-react";
-import { api } from "@/lib/api";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { EyeOff, Sparkles } from "lucide-react";
+import { toast } from "sonner";
+import { api, ApiError } from "@/lib/api";
 import { scoreBand, bandCounts, type Band } from "@/lib/match-bands";
 import { sortMatches, type MatchSort } from "@/lib/match-sort";
+import { useSelection } from "@/lib/use-selection";
 import { useRun } from "@/components/run-drawer";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
 import { ApplicationReadyBadge } from "@/components/application-ready-badge";
 import { ScoreGauge } from "@/components/score-gauge";
 import { ChipList } from "@/components/chip-list";
+import { BulkActionBar } from "@/components/bulk-action-bar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -42,6 +45,34 @@ export default function MatchesPage() {
   const run = useRun();
   const [sort, setSort] = useState<MatchSort>("high_low");
   const [filter, setFilter] = useState<Filter>("all");
+
+  const qc = useQueryClient();
+  const sel = useSelection();
+
+  const invalidateJobViews = () => {
+    qc.invalidateQueries({ queryKey: ["jobs"] });
+    qc.invalidateQueries({ queryKey: ["matches"] });
+  };
+  const unhide = useMutation({
+    mutationFn: (ids: string[]) => api.unhideJobs(ids),
+    onSuccess: invalidateJobViews,
+  });
+  const hide = useMutation({
+    mutationFn: (ids: string[]) => api.hideJobs(ids),
+    onSuccess: (_d, ids) => {
+      invalidateJobViews();
+      toast.success(`${ids.length} ${ids.length === 1 ? "job" : "jobs"} hidden`, {
+        action: { label: "Undo", onClick: () => unhide.mutate(ids) },
+      });
+    },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : "Hide failed"),
+  });
+  const handleHideOne = (jobId: string) => hide.mutate([jobId]);
+  const handleHideSelected = () => {
+    const ids = Array.from(sel.selected);
+    sel.exit();
+    hide.mutate(ids);
+  };
 
   // Fetch every match once (server returns the full set, score-desc); band
   // filtering, the distribution, and sorting are all done on the client.
@@ -134,6 +165,13 @@ export default function MatchesPage() {
               </SelectContent>
             </Select>
           </div>
+          <Button
+            size="sm"
+            variant={sel.mode ? "secondary" : "outline"}
+            onClick={() => (sel.mode ? sel.exit() : sel.enter())}
+          >
+            {sel.mode ? "Done" : "Select"}
+          </Button>
         </div>
       </Card>
 
@@ -150,6 +188,15 @@ export default function MatchesPage() {
               key={m.id}
               className="flex flex-col gap-4 border-border/80 bg-card/70 p-5 sm:flex-row sm:items-start"
             >
+              {sel.mode && (
+                <input
+                  type="checkbox"
+                  checked={sel.isSelected(m.job_id)}
+                  onChange={() => sel.toggle(m.job_id)}
+                  aria-label={`Select ${m.jobs?.title ?? "match"}`}
+                  className="mt-1 h-4 w-4 shrink-0 accent-primary"
+                />
+              )}
               <ScoreGauge score={m.score ?? 0} />
               <div className="min-w-0 flex-1">
                 <div className="font-display text-lg font-semibold">
@@ -170,6 +217,15 @@ export default function MatchesPage() {
               </div>
               <div className="flex shrink-0 flex-col items-end gap-2">
                 <ApplicationReadyBadge match={m} />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-label="Hide this job"
+                  title="Hide this job"
+                  onClick={() => handleHideOne(m.job_id)}
+                >
+                  <EyeOff className="h-3.5 w-3.5" />
+                </Button>
                 <Button
                   onClick={() =>
                     run.start(
@@ -202,6 +258,17 @@ export default function MatchesPage() {
               ? "Run Scout + Matcher to score new jobs against your CV."
               : "Try a different band, or score more jobs to widen the pool."
           }
+        />
+      )}
+      {sel.mode && (
+        <BulkActionBar
+          count={sel.count}
+          actionLabel={`Hide ${sel.count}`}
+          destructive
+          onAction={handleHideSelected}
+          onSelectAll={() => sel.selectAll(visible.map((m) => m.job_id))}
+          onCancel={sel.exit}
+          disabled={hide.isPending}
         />
       )}
     </div>

@@ -10,7 +10,11 @@ from fastapi.responses import FileResponse
 
 from job_agent.agents.tracker_agent import InvalidTransitionError, TrackerAgent
 from job_agent.api.deps import CurrentUser, get_current_user, get_user_db
-from job_agent.api.schemas import TransitionRequest
+from job_agent.api.schemas import (
+    DeleteApplicationsRequest,
+    DeleteApplicationsResponse,
+    TransitionRequest,
+)
 from job_agent.config import get_settings
 from job_agent.db.client import SupabaseClient
 
@@ -48,6 +52,20 @@ def transition(
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return {"status": body.target}
+
+
+@router.post("/applications/delete", response_model=DeleteApplicationsResponse)
+def delete_applications(
+    body: DeleteApplicationsRequest,
+    user: CurrentUser = Depends(get_current_user),
+    db: SupabaseClient = Depends(get_user_db),
+) -> DeleteApplicationsResponse:
+    summary = TrackerAgent(db=db).delete_applications(
+        body.application_ids, user_id=user.user_id
+    )
+    return DeleteApplicationsResponse(
+        deleted=summary.applications_deleted, files_deleted=summary.files_deleted
+    )
 
 
 @router.get("/applications/{application_id}/documents/{kind}")

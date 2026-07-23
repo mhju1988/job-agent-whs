@@ -1,0 +1,41 @@
+# Local Docker image testing — mirrors the Railway two-service layout.
+# For day-to-day development use: uv run uvicorn ... / npm run dev
+#
+# Usage:
+#   docker compose up -d --build     # build images and start detached
+#   docker compose logs -f            # follow logs
+#   docker compose down               # stop and remove containers
+#
+# Before first run, add these to your root .env (Compose auto-loads it):
+#   NEXT_PUBLIC_SUPABASE_URL=https://<project>.supabase.co
+#   NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-key>
+#
+# Then open http://localhost:3000
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file: .env
+    environment:
+      PORT: "8000"
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+        # Must be localhost:8000 — this value is baked into the JS bundle and
+        # runs in the browser (host network), not inside the Docker network.
+        NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: "3000"
+    depends_on:
+      - api

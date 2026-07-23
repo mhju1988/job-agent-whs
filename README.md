@@ -4,6 +4,26 @@ Solo university project (W-HS "Agentic AI", Project #7). Fetches jobs, matches t
 
 Built as four CrewAI-style agents (Scout · Matcher · Writer · Tracker) over Supabase (Postgres + pgvector) with the GWDG OpenAI-compatible LLM endpoint.
 
+**[▶ Project website](https://mhju1988.github.io/job-agent-whs/)** · **[Pitch deck (PDF)](docs/pitch_deck.pdf)** · **[Deployment guide](DEPLOY.md)**
+
+> **Product walkthrough (2–3 min):** _screencast link goes here once recorded._
+
+---
+
+## Quick start with Docker
+
+The fastest way to run the whole stack. You still need a Supabase project + a GWDG API key.
+
+```bash
+cp .env.example .env                 # fill in Supabase + GWDG keys
+# add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY too (Compose reads them)
+docker compose up -d --build         # builds the api + web images and starts both
+```
+
+Open **http://localhost:3000**. The `api` service runs on `:8000`, `web` on `:3000` — the same two-service layout used in deployment (see [DEPLOY.md](DEPLOY.md)). Apply the Supabase migrations once (below) before first use.
+
+For day-to-day development, prefer running the two services directly (`uv run uvicorn …` / `npm run dev`) — see [How to run](#how-to-run).
+
 ---
 
 ## Setup
@@ -38,17 +58,18 @@ ARTIFACTS_DIR=artifacts
 ```
 
 ### 4. Apply Supabase migrations
-Open the Supabase SQL Editor and run each file in `src/job_agent/db/migrations/` in numeric order (001 → 016). The `supabase-py` client cannot run DDL, so this is manual.
+Open the Supabase SQL Editor and run each file in `src/job_agent/db/migrations/` in numeric order (001 → 020). The `supabase-py` client cannot run DDL, so this is manual.
 
 ### 5. Verify
 ```powershell
-uv run pytest -q          # 255 tests, all mocked, no live calls
+uv run pytest -q          # 338 tests, all mocked, no live calls
 uv run ruff check src/ tests/
 uv run mypy src/
 ```
 
 ---
 
+<a id="how-to-run"></a>
 ## How to run
 
 The product is a **multi-user web app**: a FastAPI backend + a Next.js frontend, with Supabase Auth.
@@ -137,7 +158,7 @@ new → ready_to_send → applied → interview → offer
 | **Post** | Multi-tenancy · FastAPI backend · Next.js frontend · observability · SSE live progress | `src/job_agent/api/`, `frontend/`, migrations 008–016 |
 | **Post** | Jobs page redesign · Matcher explicit job_ids · cached suggestions · LLM timeout | `frontend/src/app/(app)/jobs/page.tsx`, `agents/matcher_agent.py`, `config.py` |
 
-Final state: **255 tests green**, ruff + mypy clean, frontend tsc clean, code-reviewer no 🔴 blockers.
+Final state: **338 tests green**, ruff + mypy clean, frontend tsc clean.
 
 ---
 
@@ -158,4 +179,10 @@ Final state: **255 tests green**, ruff + mypy clean, frontend tsc clean, code-re
 
 ---
 
-See `PLAN.md` for the original sprint plan, `PROGRESS.md` for per-sprint outcomes, `docs/concept.md` for the design rationale, and `docs/legal.md` for the GDPR / ToS posture.
+## Deployment
+
+The app deploys as **two services** (backend `api` + frontend `web`) from this one repo — locally via `docker compose up` (above) or to a host like Railway from the same `Dockerfile` / `frontend/Dockerfile`. Full step-by-step — env vars, cross-service URL wiring, Supabase redirect config, SSE/long-request notes, and artifact-persistence caveats — is in **[DEPLOY.md](DEPLOY.md)**.
+
+---
+
+See **[DEPLOY.md](DEPLOY.md)** for deployment, `docs/legal.md` for the GDPR / ToS posture, and `docs/sources.md` for the per-source job-board terms review.

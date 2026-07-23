@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "motion/react";
-import { ExternalLink, Loader2, Target } from "lucide-react";
+import { Eye, ExternalLink, EyeOff, Loader2, Target } from "lucide-react";
 import type { JobWithScore, Match } from "@/lib/types";
 import { formatRelativeTime } from "@/lib/relative-time";
 import { ScorePopover } from "@/components/score-popover";
@@ -34,12 +34,22 @@ export function JobCard({
   scoring,
   disabled,
   onScore,
+  selectMode,
+  selected,
+  onToggleSelect,
+  onHide,
+  onUnhide,
 }: {
   job: JobWithScore;
   match?: Match;
   scoring: boolean;
   disabled: boolean;
-  onScore: (jobId: string) => void;
+  onScore?: (jobId: string) => void;
+  selectMode?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (jobId: string) => void;
+  onHide?: (jobId: string) => void;
+  onUnhide?: (jobId: string) => void;
 }) {
   const matchedSkills = (match?.matched_skills ?? []).slice(0, 3);
 
@@ -52,6 +62,15 @@ export function JobCard({
     >
       <Card className="card-interactive flex h-full flex-col gap-3 border-border/80 bg-card/70 p-4">
         <div className="flex items-start justify-between gap-3">
+          {selectMode && (
+            <input
+              type="checkbox"
+              checked={!!selected}
+              onChange={() => onToggleSelect?.(job.id)}
+              aria-label={`Select ${job.title}`}
+              className="mt-1 h-4 w-4 shrink-0 accent-primary"
+            />
+          )}
           <div className="min-w-0 flex-1">
             <h3 className="line-clamp-2 font-medium leading-snug">{job.title}</h3>
             <p className="mt-1 truncate text-sm text-muted-foreground">
@@ -95,21 +114,49 @@ export function JobCard({
             {job.scraped_at ? `scraped ${formatRelativeTime(job.scraped_at)}` : ""}
           </span>
           <div className="flex items-center gap-1">
-            <Button
-              size="sm"
-              variant="ghost"
-              className="shrink-0"
-              aria-label="Score this job"
-              title="Score this job"
-              onClick={() => onScore(job.id)}
-              disabled={disabled}
-            >
-              {scoring ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Target className="h-3.5 w-3.5" />
-              )}
-            </Button>
+            {onUnhide && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="shrink-0"
+                aria-label="Unhide this job"
+                title="Unhide this job"
+                onClick={() => onUnhide(job.id)}
+                disabled={disabled}
+              >
+                <Eye className="h-3.5 w-3.5" />
+              </Button>
+            )}
+            {onHide && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="shrink-0"
+                aria-label="Hide this job"
+                title="Hide this job"
+                onClick={() => onHide(job.id)}
+                disabled={disabled}
+              >
+                <EyeOff className="h-3.5 w-3.5" />
+              </Button>
+            )}
+            {onScore && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="shrink-0"
+                aria-label="Score this job"
+                title="Score this job"
+                onClick={() => onScore(job.id)}
+                disabled={disabled}
+              >
+                {scoring ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Target className="h-3.5 w-3.5" />
+                )}
+              </Button>
+            )}
             {job.url && (
               <Button asChild variant="ghost" size="sm" className="shrink-0">
                 <a href={job.url} target="_blank" rel="noopener noreferrer">

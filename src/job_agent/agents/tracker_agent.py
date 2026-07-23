@@ -54,6 +54,15 @@ class DeleteSummary(BaseModel):
     obs_runs_deleted: int = 0
 
 
+class DeleteApplicationsSummary(BaseModel):
+    """Summary returned by TrackerAgent.delete_applications()."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    applications_deleted: int
+    files_deleted: int
+
+
 # ---------------------------------------------------------------------------
 # Agent
 # ---------------------------------------------------------------------------
@@ -202,6 +211,57 @@ class TrackerAgent:
                 self._obs.finish_run(ctx.run_id, "error", str(exc)[:500])
             raise
 
+    def _delete_application_files(self, file_paths: list[str]) -> int:
+        """Unlink each path that resolves inside artifacts_dir. Returns count removed."""
+        artifact_root = self._artifacts_dir.resolve()
+        files_deleted = 0
+        for path_str in file_paths:
+            p = Path(path_str).resolve()
+            if not p.is_relative_to(artifact_root):
+                continue  # never touch paths outside the artifacts directory
+            existed = p.exists()
+            p.unlink(missing_ok=True)
+            if existed:
+                files_deleted += 1
+        return files_deleted
+
+    def delete_applications(
+        self, application_ids: list[str], *, user_id: str
+    ) -> DeleteApplicationsSummary:
+        """Hard-delete the given applications (scoped to user_id) and their files."""
+        if not application_ids:
+            return DeleteApplicationsSummary(applications_deleted=0, files_deleted=0)
+
+        rows = cast(
+            "list[dict[str, Any]]",
+            self._db.raw.table("applications")
+            .select("cover_letter_path, cv_variant_path")
+            .eq("user_id", user_id)
+            .in_("id", application_ids)
+            .execute()
+            .data
+            or [],
+        )
+        file_paths: list[str] = []
+        for row in rows:
+            for key in ("cover_letter_path", "cv_variant_path"):
+                val = row.get(key)
+                if val:
+                    file_paths.append(str(val))
+
+        del_resp = (
+            self._db.raw.table("applications")
+            .delete()
+            .eq("user_id", user_id)
+            .in_("id", application_ids)
+            .execute()
+        )
+        applications_deleted = len(del_resp.data or [])
+        files_deleted = self._delete_application_files(file_paths)
+        return DeleteApplicationsSummary(
+            applications_deleted=applications_deleted, files_deleted=files_deleted
+        )
+
     def delete_my_data(self, *, user_id: str) -> DeleteSummary:
         """Wipe one user's personal data: profile, match_scores, applications, agent_runs, files.
 
@@ -253,16 +313,7 @@ class TrackerAgent:
         applications_deleted: int = len(applications_resp.data or [])
 
         # Delete artifact files — only paths that resolve inside artifacts_dir.
-        artifact_root = self._artifacts_dir.resolve()
-        files_deleted = 0
-        for path_str in file_paths:
-            p = Path(path_str).resolve()
-            if not p.is_relative_to(artifact_root):
-                continue  # skip any path that escaped the artifacts directory
-            existed = p.exists()
-            p.unlink(missing_ok=True)
-            if existed:
-                files_deleted += 1
+        files_deleted = self._delete_application_files(file_paths)
 
         # Purge observability data that may contain PII (prompt_snippet carries
         # CV text). llm_events cascade-deletes via the agent_runs FK.

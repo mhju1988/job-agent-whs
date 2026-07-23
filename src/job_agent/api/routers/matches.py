@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, Query
 
 from job_agent.api.deps import CurrentUser, get_current_user, get_user_db
 from job_agent.db.client import SupabaseClient
+from job_agent.services.hidden_jobs import fetch_hidden_job_ids
 from job_agent.services.match_query import filter_matches
 
 router = APIRouter()
@@ -28,7 +29,9 @@ def list_matches(
     min_score: int = Query(0, ge=0, le=100),
     db: SupabaseClient = Depends(get_user_db),
 ) -> list[dict[str, Any]]:
-    rows = (
+    hidden = fetch_hidden_job_ids(db)
+    rows = cast(
+        "list[dict[str, Any]]",
         db.raw.table("match_scores")
         .select(
             "id, job_id, score, matched_skills, gaps, rationale, created_at, "
@@ -38,9 +41,10 @@ def list_matches(
         .limit(MAX_MATCHES)
         .execute()
         .data
-        or []
+        or [],
     )
-    return filter_matches(cast("list[dict[str, Any]]", rows), min_score)
+    visible = [r for r in rows if str(r["job_id"]) not in hidden]
+    return filter_matches(visible, min_score)
 
 
 # Fit-graph node cap — deliberately small for readability, independent of the
@@ -77,6 +81,7 @@ def get_match_graph(
         return {"profile": None, "jobs": []}
     profile = cast("dict[str, Any]", profile_rows[0])
     profile_id = profile["id"]
+    hidden = fetch_hidden_job_ids(db)
 
     # Stage 2 — the persisted LLM scores joined to job titles/companies. This is
     # the union of jobs we surface, so a missing Stage-1 value never hides a job.
@@ -116,6 +121,8 @@ def get_match_graph(
     jobs: list[dict[str, Any]] = []
     for r in score_rows:
         job_id = str(r["job_id"])
+        if job_id in hidden:
+            continue
         joined = cast("dict[str, Any] | None", r.get("jobs"))
         jobs.append(
             {

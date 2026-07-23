@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
 
-from job_agent.agents.tracker_agent import InvalidTransitionError
+from job_agent.agents.tracker_agent import DeleteApplicationsSummary, InvalidTransitionError
 from job_agent.api.deps import CurrentUser, get_current_user, get_user_db
 from job_agent.api.main import create_app
 from job_agent.config import Settings
@@ -80,3 +80,20 @@ def test_download_bad_kind_returns_400() -> None:
     db = MagicMock()
     r = _client(db).get("/api/applications/a-1/documents/banana")
     assert r.status_code == 400
+
+
+def test_delete_applications_calls_tracker_and_returns_counts() -> None:
+    db = MagicMock()
+    tracker = MagicMock()
+    tracker.delete_applications.return_value = DeleteApplicationsSummary(
+        applications_deleted=2, files_deleted=3
+    )
+    with patch(
+        "job_agent.api.routers.applications.TrackerAgent", return_value=tracker
+    ):
+        r = _client(db).post(
+            "/api/applications/delete", json={"application_ids": ["a1", "a2"]}
+        )
+    assert r.status_code == 200
+    assert r.json() == {"deleted": 2, "files_deleted": 3}
+    tracker.delete_applications.assert_called_once_with(["a1", "a2"], user_id="u-1")

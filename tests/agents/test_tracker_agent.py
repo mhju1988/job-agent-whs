@@ -10,6 +10,7 @@ import pytest
 
 from job_agent.agents.tracker_agent import (
     _ALLOWED_TRANSITIONS,
+    DeleteApplicationsSummary,
     DeleteSummary,
     InvalidTransitionError,
     TrackerAgent,
@@ -505,3 +506,79 @@ def test_delete_my_data_is_user_scoped_not_table_wipe(tmp_path: Path) -> None:
         assert mock.delete.return_value.neq.call_count == 0
         eq_calls = [c.args for c in mock.delete.return_value.eq.call_args_list]
         assert ("user_id", USER_ID) in eq_calls
+
+
+# ---------------------------------------------------------------------------
+# delete_applications
+# ---------------------------------------------------------------------------
+
+def _make_db_for_delete_apps(
+    *, file_rows: list[dict], deleted: list[dict]
+) -> MagicMock:
+    """Mock supporting delete_applications: select(paths) + delete chains."""
+    db = MagicMock()
+    app_mock = MagicMock()
+    # .select(...).eq("user_id",..).in_("id",..).execute() → path rows
+    app_mock.select.return_value.eq.return_value.in_.return_value.execute.return_value.data = (
+        file_rows
+    )
+    # .delete().eq("user_id",..).in_("id",..).execute() → deleted rows
+    app_mock.delete.return_value.eq.return_value.in_.return_value.execute.return_value.data = (
+        deleted
+    )
+    db._app_mock = app_mock
+    db.raw = MagicMock()
+    db.raw.table.side_effect = lambda name: {"applications": app_mock}.get(
+        name, MagicMock()
+    )
+    return db
+
+
+def test_delete_applications_removes_rows_and_files(tmp_path: Path) -> None:
+    cover = tmp_path / "cover.docx"
+    cv = tmp_path / "cv.docx"
+    cover.write_bytes(b"c")
+    cv.write_bytes(b"v")
+    db = _make_db_for_delete_apps(
+        file_rows=[{"cover_letter_path": str(cover), "cv_variant_path": str(cv)}],
+        deleted=[{"id": "a1"}],
+    )
+    agent = TrackerAgent(db=db, artifacts_dir=tmp_path, clock=_fixed_clock)
+    summary = agent.delete_applications(["a1"], user_id=USER_ID)
+
+    assert isinstance(summary, DeleteApplicationsSummary)
+    assert summary.applications_deleted == 1
+    assert summary.files_deleted == 2
+    assert not cover.exists() and not cv.exists()
+
+
+def test_delete_applications_empty_is_noop() -> None:
+    db = MagicMock()
+    agent = TrackerAgent(db=db, clock=_fixed_clock)
+    summary = agent.delete_applications([], user_id=USER_ID)
+    assert summary.applications_deleted == 0
+    assert summary.files_deleted == 0
+    db.raw.table.assert_not_called()
+
+
+def test_delete_applications_scopes_to_user(tmp_path: Path) -> None:
+    db = _make_db_for_delete_apps(file_rows=[], deleted=[{"id": "a1"}])
+    agent = TrackerAgent(db=db, artifacts_dir=tmp_path, clock=_fixed_clock)
+    agent.delete_applications(["a1"], user_id=USER_ID)
+    del_eq = db._app_mock.delete.return_value.eq.call_args[0]
+    assert del_eq == ("user_id", USER_ID)
+
+
+def test_delete_applications_skips_files_outside_artifacts(tmp_path: Path) -> None:
+    outside = tmp_path / "secret.docx"
+    outside.write_bytes(b"x")
+    artifacts = tmp_path / "artifacts"
+    artifacts.mkdir()
+    db = _make_db_for_delete_apps(
+        file_rows=[{"cover_letter_path": str(outside), "cv_variant_path": None}],
+        deleted=[{"id": "a1"}],
+    )
+    agent = TrackerAgent(db=db, artifacts_dir=artifacts, clock=_fixed_clock)
+    summary = agent.delete_applications(["a1"], user_id=USER_ID)
+    assert summary.files_deleted == 0
+    assert outside.exists()

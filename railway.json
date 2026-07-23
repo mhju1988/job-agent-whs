@@ -1,0 +1,34 @@
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "services": [
+    {
+      "name": "api",
+      "source": {
+        "repo": ".",
+        "branch": "main"
+      },
+      "build": {
+        "builder": "DOCKERFILE",
+        "dockerfilePath": "Dockerfile"
+      },
+      "deploy": {
+        "healthcheckPath": "/api/health"
+      }
+    },
+    {
+      "name": "web",
+      "source": {
+        "repo": ".",
+        "branch": "main",
+        "rootDirectory": "frontend"
+      },
+      "build": {
+        "builder": "DOCKERFILE",
+        "dockerfilePath": "Dockerfile"
+      },
+      "deploy": {
+        "healthcheckPath": "/"
+      }
+    }
+  ]
+}

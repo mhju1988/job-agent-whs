@@ -1,0 +1,23 @@
+.venv/
+node_modules/
+.next/
+artifacts/
+.env
+.env.*
+!.env.example
+docs/
+scripts/
+.git/
+__pycache__/
+*.pyc
+*.pyo
+tests/
+dist/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.obsidian/
+.playwright-cli/
+graphify-out/
+first vault/
+logs/

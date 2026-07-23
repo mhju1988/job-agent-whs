@@ -1,15 +1,19 @@
 "use client";
 
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bell, Download, Send } from "lucide-react";
+import { Bell, Download, Send, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { api, ApiError } from "@/lib/api";
 import { applyOptimisticTransition } from "@/lib/application-transition";
 import { ALLOWED_TRANSITIONS, STATUS_META, STATUS_ORDER } from "@/lib/status";
+import { useSelection } from "@/lib/use-selection";
 import type { Application, ApplicationStatus } from "@/lib/types";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
 import { StatusBadge } from "@/components/status-badge";
+import { BulkActionBar } from "@/components/bulk-action-bar";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -34,11 +38,45 @@ function isOverdue(iso: string | null): boolean {
 
 export default function ApplicationsPage() {
   const qc = useQueryClient();
+  const sel = useSelection();
+  // ids pending confirmation; null = dialog closed.
+  const [pendingDelete, setPendingDelete] = useState<string[] | null>(null);
 
   const { data: apps, isLoading } = useQuery({
     queryKey: ["applications"],
     queryFn: api.getApplications,
   });
+
+  const del = useMutation({
+    mutationFn: (ids: string[]) => api.deleteApplications(ids),
+    onMutate: async (ids) => {
+      await qc.cancelQueries({ queryKey: ["applications"] });
+      const previous = qc.getQueryData<Application[]>(["applications"]);
+      if (previous) {
+        const remove = new Set(ids);
+        qc.setQueryData<Application[]>(
+          ["applications"],
+          previous.filter((a) => !remove.has(a.id)),
+        );
+      }
+      return { previous };
+    },
+    onError: (e, _ids, ctx) => {
+      if (ctx?.previous) qc.setQueryData(["applications"], ctx.previous);
+      toast.error(e instanceof ApiError ? e.message : "Delete failed");
+    },
+    onSuccess: (_d, ids) =>
+      toast.success(`${ids.length} ${ids.length === 1 ? "application" : "applications"} deleted`),
+    onSettled: () => qc.invalidateQueries({ queryKey: ["applications"] }),
+  });
+
+  const confirmDelete = () => {
+    if (pendingDelete) {
+      del.mutate(pendingDelete);
+      sel.exit();
+    }
+    setPendingDelete(null);
+  };
 
   const transition = useMutation({
     mutationFn: ({ id, target }: { id: string; target: ApplicationStatus }) =>
@@ -92,11 +130,23 @@ export default function ApplicationsPage() {
 
   return (
     <div className="mx-auto max-w-6xl">
-      <PageHeader
-        eyebrow="Pipeline"
-        title="Applications"
-        description="Move each card forward with its buttons as it progresses. Forward-only — you click the final Apply yourself."
-      />
+      <div className="flex items-start justify-between gap-4">
+        <PageHeader
+          eyebrow="Pipeline"
+          title="Applications"
+          description="Move each card forward with its buttons as it progresses. Forward-only — you click the final Apply yourself."
+        />
+        {apps && apps.length > 0 && (
+          <Button
+            size="sm"
+            variant={sel.mode ? "secondary" : "outline"}
+            className="mt-1 shrink-0"
+            onClick={() => (sel.mode ? sel.exit() : sel.enter())}
+          >
+            {sel.mode ? "Done" : "Select"}
+          </Button>
+        )}
+      </div>
       <div className="flex gap-4 overflow-x-auto pb-3">
         {STATUS_ORDER.map((status) => {
           const items = byStatus(status);
@@ -126,17 +176,40 @@ export default function ApplicationsPage() {
                 {items.map((app) => (
                   <Card key={app.id} className="border-border/80 bg-card p-3">
                     <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-medium">
-                          {app.job_title ?? "Untitled"}
-                        </div>
-                        <div className="truncate text-xs text-muted-foreground">
-                          {app.job_company ?? "Unknown"}
+                      <div className="flex min-w-0 items-start gap-2">
+                        {sel.mode && (
+                          <input
+                            type="checkbox"
+                            checked={sel.isSelected(app.id)}
+                            onChange={() => sel.toggle(app.id)}
+                            aria-label={`Select ${app.job_title ?? "application"}`}
+                            className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+                          />
+                        )}
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-medium">
+                            {app.job_title ?? "Untitled"}
+                          </div>
+                          <div className="truncate text-xs text-muted-foreground">
+                            {app.job_company ?? "Unknown"}
+                          </div>
                         </div>
                       </div>
-                      {isOverdue(app.follow_up_at) && (
-                        <Bell className="h-4 w-4 shrink-0 text-status-interview" />
-                      )}
+                      <div className="flex shrink-0 items-center gap-1">
+                        {isOverdue(app.follow_up_at) && (
+                          <Bell className="h-4 w-4 text-status-interview" />
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                          aria-label="Delete application"
+                          title="Delete application"
+                          onClick={() => setPendingDelete([app.id])}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                     </div>
                     {ALLOWED_TRANSITIONS[app.status].length > 0 && (
                       <div className="mt-2 flex flex-wrap gap-1">
@@ -185,6 +258,28 @@ export default function ApplicationsPage() {
           );
         })}
       </div>
+      {sel.mode && (
+        <BulkActionBar
+          count={sel.count}
+          actionLabel={`Delete ${sel.count}`}
+          destructive
+          onAction={() => setPendingDelete(Array.from(sel.selected))}
+          onSelectAll={() => sel.selectAll((apps ?? []).map((a) => a.id))}
+          onCancel={sel.exit}
+          disabled={del.isPending}
+        />
+      )}
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        onOpenChange={(o) => !o && setPendingDelete(null)}
+        title="Delete applications?"
+        description={`This removes ${pendingDelete?.length ?? 0} application${
+          (pendingDelete?.length ?? 0) === 1 ? "" : "s"
+        } and their generated documents. This can't be undone.`}
+        confirmLabel="Delete"
+        destructive
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }

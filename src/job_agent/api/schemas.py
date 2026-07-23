@@ -80,3 +80,16 @@ class DeleteSummaryResponse(_S):
     applications_deleted: int
     files_deleted: int
     obs_runs_deleted: int = 0
+
+
+class HideJobsRequest(_S):
+    job_ids: list[str] = Field(default_factory=list, max_length=200)
+
+
+class DeleteApplicationsRequest(_S):
+    application_ids: list[str] = Field(default_factory=list, max_length=200)
+
+
+class DeleteApplicationsResponse(_S):
+    deleted: int
+    files_deleted: int

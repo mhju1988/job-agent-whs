@@ -60,6 +60,8 @@ export const api = {
   getSearchSuggestions: () =>
     apiFetch<SearchSuggestion[]>("/api/search/suggestions"),
   getJobs: () => apiFetch<Job[]>("/api/jobs"),
+  /** The caller's hidden jobs (newest-hidden first) for the restore view. */
+  getHiddenJobs: () => apiFetch<Job[]>("/api/jobs/hidden"),
   getMatches: (minScore = 0) =>
     apiFetch<Match[]>(`/api/matches?min_score=${minScore}`),
   /** Both scoring stages for the fit-graph page (cosine + LLM). */
@@ -71,6 +73,27 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ target }),
     }),
+  hideJobs: (jobIds: string[]) =>
+    apiFetch<{ hidden: number }>("/api/jobs/hide", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ job_ids: jobIds }),
+    }),
+  unhideJobs: (jobIds: string[]) =>
+    apiFetch<{ unhidden: number }>("/api/jobs/unhide", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ job_ids: jobIds }),
+    }),
+  deleteApplications: (ids: string[]) =>
+    apiFetch<{ deleted: number; files_deleted: number }>(
+      "/api/applications/delete",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ application_ids: ids }),
+      },
+    ),
   deleteMyData: () =>
     apiFetch<DeleteSummary>("/api/data/delete", { method: "POST" }),
   getRuns: () => apiFetch<ObsRun[]>("/api/observability/runs"),

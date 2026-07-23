@@ -4,9 +4,19 @@ Solo university project (W-HS "Agentic AI", Project #7). Fetches jobs, matches t
 
 Built as four CrewAI-style agents (Scout · Matcher · Writer · Tracker) over Supabase (Postgres + pgvector) with the GWDG OpenAI-compatible LLM endpoint.
 
-**[▶ Project website](https://mhju1988.github.io/job-agent-whs/)** · **[Pitch deck (PDF)](docs/pitch_deck.pdf)** · **[Deployment guide](DEPLOY.md)**
+<p align="center">
+  <a href="https://github.com/mhju1988/job-agent-whs/releases/download/final/job-agent-walkthrough.mp4">
+    <img src="docs/demo.gif" alt="Job Agent product walkthrough — the full Scout to Matcher to Writer to Tracker loop" width="760">
+  </a>
+</p>
 
-> **▶ [Watch the product walkthrough (screencast)](https://github.com/mhju1988/job-agent-whs/releases/download/final/job-agent-walkthrough.mp4)** — the whole loop end to end: upload CV → Scout → Matcher → Writer → Tracker, with the human keeping the Apply click. _(Also on the [release page](https://github.com/mhju1988/job-agent-whs/releases/tag/final).)_
+<p align="center">
+  <em>The full loop, sped up.</em>
+  &nbsp;·&nbsp; <a href="https://github.com/mhju1988/job-agent-whs/releases/download/final/job-agent-walkthrough.mp4"><b>▶ Watch with audio</b></a>
+  &nbsp;·&nbsp; <a href="https://mhju1988.github.io/job-agent-whs/">Project website</a>
+  &nbsp;·&nbsp; <a href="docs/pitch_deck.pdf">Pitch deck</a>
+  &nbsp;·&nbsp; <a href="DEPLOY.md">Deploy</a>
+</p>
 
 ---
 

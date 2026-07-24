@@ -99,7 +99,14 @@ npm install                                   # first time
 copy .env.local.example .env.local            # fill in NEXT_PUBLIC_* (Supabase URL + anon key + API base)
 npm run dev                                   # http://localhost:3000
 ```
-Sign up at `/signup` (or create a user in the Supabase dashboard → Authentication), then: Dashboard · Jobs (run Scout) · Matches (prepare application) · Applications (kanban pipeline) · Profile (CV upload + GDPR delete) · Observability. Long agent runs stream live progress in the run drawer (SSE). The bold "command-center" design system is previewed at `/styleguide`.
+Sign up at `/signup`, then: Dashboard · Jobs (run Scout) · Matches (prepare application) · Applications (kanban pipeline) · Profile (CV upload + GDPR delete) · Observability. Long agent runs stream live progress in the run drawer (SSE). The bold "command-center" design system is previewed at `/styleguide`.
+
+> **First account — read this before signing up.** New Supabase projects have **Confirm email** switched on, and the built-in mailer is rate-limited (on recent projects it only delivers to addresses on the project's own team). Sign up and the account is created, but the confirmation mail may never arrive and you cannot sign in. Pick whichever is easiest:
+> - **Authentication → Sign In / Providers → Email → turn off "Confirm email"** — simplest for local testing, and signups keep working normally.
+> - **Authentication → Users → Add user**, ticking *Auto Confirm User*.
+> - Already have an admin? Confirm the account from the app's own `/admin` page.
+>
+> `/signup` follows your project's settings: if you ever turn **off** "Allow new users to sign up", the page explains that access is by invitation instead of failing with a raw error.
 
 Accounts promoted to **admin** additionally see `/admin`: user management (ban · unban · confirm email · change role), a read-only view of any user's applications, job moderation (delete bad or duplicate listings from the shared pool), and a cross-user ops summary. Every admin action is written to an `admin_audit_log` row.
 

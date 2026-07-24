@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Job Agent — Four agents do the busywork. You keep the click.</title>
+<meta name="description" content="A multi-agent system that automates everything about a job application except the final human click. Fetches jobs, matches them to your CV with vector search + an LLM, drafts a tailored cover letter and CV, and tracks every application.">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+:root {
+  --bg:          hsl(240 11% 5%);
+  --bg-2:        hsl(240 10% 7%);
+  --card:        hsl(240 9% 8.5%);
+  --card-hi:     hsl(240 9% 11%);
+  --border:      hsl(240 6% 16%);
+  --border-hi:   hsl(240 6% 22%);
+  --text:        hsl(60 6% 96%);
+  --muted:       hsl(240 5% 65%);
+  --faint:       hsl(240 5% 45%);
+  --primary:     hsl(74 95% 63%);
+  --primary-dim: hsl(74 60% 55%);
+  --ink:         hsl(240 16% 6%);
+
+  --scout:   hsl(180 80% 55%);
+  --matcher: hsl(74 95% 63%);
+  --writer:  hsl(265 90% 72%);
+  --tracker: hsl(32 100% 60%);
+
+  --display: 'Bricolage Grotesque', ui-sans-serif, system-ui, sans-serif;
+  --body:    'Hanken Grotesk', ui-sans-serif, system-ui, sans-serif;
+  --mono:    'JetBrains Mono', ui-monospace, 'Courier New', monospace;
+
+  --maxw: 1140px;
+  --gutter: clamp(20px, 5vw, 64px);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--body);
+  font-size: 17px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* Signature gradient-mesh atmosphere, lifted from the product shell */
+body::before {
+  content: ""; position: fixed; inset: 0; z-index: -2; pointer-events: none;
+  background-image:
+    radial-gradient(45rem 45rem at 10% -10%, hsl(74 95% 63% / 0.08), transparent 60%),
+    radial-gradient(40rem 40rem at 100% 2%, hsl(180 80% 55% / 0.06), transparent 60%),
+    radial-gradient(55rem 55rem at 75% 108%, hsl(265 90% 65% / 0.06), transparent 60%);
+}
+/* Film grain */
+body::after {
+  content: ""; position: fixed; inset: 0; z-index: 200; pointer-events: none; opacity: .035;
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2"/></filter><rect width="160" height="160" filter="url(%23n)" opacity="0.5"/></svg>');
+}
+
+::selection { background: hsl(74 95% 63% / .28); color: var(--text); }
+a { color: inherit; text-decoration: none; }
+:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--primary); border-radius: 6px; }
+
+.wrap { max-width: var(--maxw); margin: 0 auto; padding-inline: var(--gutter); }
+
+.eyebrow {
+  font-family: var(--mono); font-size: 12px; letter-spacing: .22em;
+  text-transform: uppercase; color: var(--muted);
+  display: inline-flex; align-items: center; gap: 10px;
+}
+.eyebrow::before {
+  content: ""; width: 22px; height: 1px; background: var(--primary);
+  box-shadow: 0 0 8px hsl(74 95% 63% / .7);
+}
+
+h1, h2, h3 { font-family: var(--display); font-weight: 700; line-height: 1.04; letter-spacing: -0.02em; }
+.accent { color: var(--primary); }
+
+/* ————— Top nav ————— */
+header.nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  backdrop-filter: blur(12px);
+  background: hsl(240 11% 5% / .72);
+  border-bottom: 1px solid transparent;
+  transition: border-color .3s, background .3s;
+}
+header.nav.scrolled { border-bottom-color: var(--border); }
+.nav-inner {
+  max-width: var(--maxw); margin: 0 auto; padding: 14px var(--gutter);
+  display: flex; align-items: center; justify-content: space-between; gap: 20px;
+}
+.brand { display: flex; align-items: center; gap: 11px; font-family: var(--mono); font-size: 14px; letter-spacing: .04em; }
+.brand-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--primary); box-shadow: 0 0 12px hsl(74 95% 63% / .9); }
+.brand b { font-weight: 600; }
+.nav-links { display: none; gap: 28px; font-size: 14px; color: var(--muted); }
+.nav-links a { transition: color .18s; }
+.nav-links a:hover { color: var(--text); }
+@media (min-width: 860px) { .nav-links { display: flex; } }
+.nav-cta {
+  font-family: var(--mono); font-size: 12.5px; letter-spacing: .06em;
+  padding: 9px 16px; border-radius: 999px; border: 1px solid var(--border-hi);
+  color: var(--text); transition: border-color .2s, color .2s, background .2s;
+  white-space: nowrap;
+}
+.nav-cta:hover { border-color: var(--primary); color: var(--primary); }
+
+/* ————— Hero ————— */
+.hero { padding: 168px 0 96px; position: relative; }
+.hero h1 { font-size: clamp(40px, 7.2vw, 82px); font-weight: 800; margin: 26px 0 0; max-width: 15ch; }
+.hero .sub {
+  margin-top: 26px; max-width: 56ch; font-size: clamp(17px, 2.2vw, 21px);
+  color: var(--muted); line-height: 1.55;
+}
+.hero .sub b { color: var(--text); font-weight: 600; }
+.hero-actions { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 38px; }
+.btn {
+  display: inline-flex; align-items: center; gap: 10px;
+  font-family: var(--mono); font-size: 13.5px; letter-spacing: .04em;
+  padding: 13px 22px; border-radius: 999px; cursor: pointer;
+  transition: transform .16s ease, box-shadow .2s, background .2s, border-color .2s;
+}
+.btn-primary { background: var(--primary); color: var(--ink); font-weight: 600; border: 1px solid var(--primary); }
+.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 10px 30px hsl(74 95% 63% / .28); }
+.btn-ghost { border: 1px solid var(--border-hi); color: var(--text); }
+.btn-ghost:hover { border-color: var(--primary); color: var(--primary); transform: translateY(-2px); }
+
+/* ————— Pipeline signature ————— */
+.pipeline {
+  margin-top: 74px; position: relative;
+  border: 1px solid var(--border); border-radius: 20px;
+  background: linear-gradient(180deg, var(--card-hi), var(--card));
+  padding: clamp(24px, 4vw, 44px) clamp(18px, 3vw, 40px);
+  overflow: hidden;
+}
+.pipeline-label {
+  font-family: var(--mono); font-size: 11px; letter-spacing: .2em; text-transform: uppercase;
+  color: var(--faint); margin-bottom: 26px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+}
+.flow { display: flex; align-items: stretch; gap: 0; position: relative; }
+.stage {
+  flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 12px;
+  position: relative; padding: 4px 10px; text-align: center; align-items: center;
+}
+.stage-orb {
+  width: 54px; height: 54px; border-radius: 15px; display: grid; place-items: center;
+  border: 1px solid var(--border-hi); background: var(--bg-2);
+  font-family: var(--mono); font-size: 20px; position: relative;
+  transition: box-shadow .4s, border-color .4s, transform .4s;
+}
+.stage[data-agent] .stage-orb { color: var(--ac); }
+.stage.lit .stage-orb {
+  border-color: var(--ac); transform: translateY(-3px);
+  box-shadow: 0 0 0 1px var(--ac), 0 0 26px -2px var(--ac);
+}
+.stage-name { font-family: var(--display); font-weight: 700; font-size: 15px; letter-spacing: -.01em; }
+.stage-role { font-size: 12.5px; color: var(--muted); line-height: 1.4; max-width: 18ch; }
+.stage.lit .stage-name { color: var(--ac); }
+.connector { flex: 0 0 auto; align-self: flex-start; margin-top: 26px; width: clamp(14px, 3vw, 40px); height: 2px; position: relative; background: var(--border); border-radius: 2px; }
+.connector::after {
+  content: ""; position: absolute; inset: 0; width: 0; background: var(--primary);
+  border-radius: 2px; box-shadow: 0 0 8px hsl(74 95% 63% / .6); transition: width .35s ease;
+}
+.connector.on::after { width: 100%; }
+.stage.you .stage-orb { border-color: var(--primary); color: var(--primary); background: hsl(74 95% 63% / .07); }
+.stage.you.lit .stage-orb { box-shadow: 0 0 0 1px var(--primary), 0 0 30px -1px hsl(74 95% 63% / .8); }
+.stage.you .stage-name { color: var(--primary); }
+.flow-caption {
+  margin-top: 24px; font-size: 13.5px; color: var(--muted); text-align: center;
+  min-height: 1.4em; font-family: var(--mono); letter-spacing: .02em;
+}
+.flow-caption b { color: var(--text); font-weight: 600; }
+@media (max-width: 700px) {
+  .flow { flex-direction: column; gap: 0; }
+  .stage { flex-direction: row; text-align: left; align-items: center; gap: 16px; padding: 12px 4px; }
+  .stage-role { max-width: none; }
+  .connector { width: 2px; height: clamp(14px, 4vw, 26px); margin: 0 0 0 26px; align-self: flex-start; }
+  .connector::after { width: 100%; height: 0; transition: height .35s ease; }
+  .connector.on::after { height: 100%; }
+}
+
+/* ————— Section scaffold ————— */
+section.band { padding: clamp(72px, 10vw, 128px) 0; position: relative; }
+.band + .band { border-top: 1px solid var(--border); }
+.band-head { max-width: 62ch; }
+.band-head h2 { font-size: clamp(30px, 4.6vw, 50px); margin: 20px 0 0; }
+.band-head p.lede { margin-top: 20px; font-size: clamp(17px, 2vw, 20px); color: var(--muted); }
+
+/* Stats strip */
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; margin-top: 56px; background: var(--border); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; }
+.stat { background: var(--card); padding: 26px 24px; }
+.stat .n { font-family: var(--display); font-weight: 800; font-size: clamp(30px, 4vw, 42px); line-height: 1; letter-spacing: -.03em; }
+.stat .n small { font-size: .5em; color: var(--muted); font-weight: 600; margin-left: 2px; }
+.stat .l { margin-top: 10px; font-size: 13.5px; color: var(--muted); }
+.stat:nth-child(1) .n { color: var(--scout); }
+.stat:nth-child(2) .n { color: var(--matcher); }
+.stat:nth-child(3) .n { color: var(--writer); }
+.stat:nth-child(4) .n { color: var(--tracker); }
+
+/* Why — problem/goals */
+.why-grid { display: grid; gap: 28px; margin-top: 56px; grid-template-columns: 1fr; }
+@media (min-width: 820px) { .why-grid { grid-template-columns: 1.1fr 1fr; gap: 40px; } }
+.loop {
+  border: 1px solid var(--border); border-radius: 16px; background: var(--card);
+  padding: 30px; font-family: var(--mono); font-size: 14px; color: var(--muted);
+}
+.loop .line { display: flex; align-items: center; gap: 12px; padding: 9px 0; }
+.loop .line span { width: 20px; color: var(--faint); }
+.loop .line.strike { color: var(--faint); text-decoration: line-through; text-decoration-color: hsl(74 95% 63% / .5); }
+.loop .arrow { color: var(--primary); padding-left: 32px; }
+.goals { display: flex; flex-direction: column; gap: 16px; }
+.goal { border-left: 2px solid var(--primary); padding: 4px 0 4px 20px; }
+.goal h4 { font-family: var(--display); font-size: 18px; font-weight: 700; }
+.goal p { font-size: 15px; color: var(--muted); margin-top: 5px; }
+
+/* Agents */
+.agents { display: grid; gap: 18px; margin-top: 56px; grid-template-columns: 1fr; }
+@media (min-width: 720px) { .agents { grid-template-columns: 1fr 1fr; } }
+.agent {
+  --ac: var(--primary);
+  border: 1px solid var(--border); border-radius: 18px; background: var(--card);
+  padding: 30px; position: relative; overflow: hidden;
+  transition: transform .2s, border-color .2s, box-shadow .2s;
+}
+.agent::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--ac); opacity: .8; }
+.agent:hover { transform: translateY(-4px); border-color: color-mix(in srgb, var(--ac) 55%, var(--border)); box-shadow: 0 16px 44px -20px var(--ac); }
+.agent .tag { display: flex; align-items: center; gap: 12px; }
+.agent .tag .mark { width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center; background: color-mix(in srgb, var(--ac) 14%, transparent); color: var(--ac); font-family: var(--mono); font-size: 17px; border: 1px solid color-mix(in srgb, var(--ac) 40%, transparent); }
+.agent h3 { font-size: 23px; }
+.agent .n { font-family: var(--mono); font-size: 12px; color: var(--faint); letter-spacing: .16em; }
+.agent p { margin-top: 16px; color: var(--muted); font-size: 15.5px; }
+.agent .io { margin-top: 18px; font-family: var(--mono); font-size: 12.5px; color: var(--faint); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.agent .io b { color: var(--ac); font-weight: 500; }
+.agent[data-a="scout"]   { --ac: var(--scout); }
+.agent[data-a="matcher"] { --ac: var(--matcher); }
+.agent[data-a="writer"]  { --ac: var(--writer); }
+.agent[data-a="tracker"] { --ac: var(--tracker); }
+
+/* How it works — principle rows */
+.principles { margin-top: 56px; display: flex; flex-direction: column; }
+.principle { display: grid; grid-template-columns: 1fr; gap: 8px; padding: 30px 0; border-top: 1px solid var(--border); }
+.principle:last-child { border-bottom: 1px solid var(--border); }
+@media (min-width: 780px) { .principle { grid-template-columns: 260px 1fr; gap: 40px; align-items: start; } }
+.principle .k { font-family: var(--mono); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--primary); padding-top: 5px; }
+.principle h3 { font-size: 21px; margin-bottom: 8px; }
+.principle p { color: var(--muted); font-size: 15.5px; }
+.principle code { font-family: var(--mono); font-size: .86em; background: var(--bg-2); border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px; color: var(--text); }
+
+/* Trust callout */
+.trust { display: grid; gap: 18px; margin-top: 52px; grid-template-columns: 1fr; }
+@media (min-width: 760px) { .trust { grid-template-columns: repeat(3, 1fr); } }
+.tcard { border: 1px solid var(--border); border-radius: 16px; background: var(--card); padding: 26px; }
+.tcard .ic { font-family: var(--mono); color: var(--primary); font-size: 22px; }
+.tcard h4 { font-family: var(--display); font-size: 18px; margin-top: 14px; }
+.tcard p { color: var(--muted); font-size: 14.5px; margin-top: 9px; }
+
+/* Try it */
+.try-grid { display: grid; gap: 22px; margin-top: 52px; grid-template-columns: 1fr; }
+@media (min-width: 900px) { .try-grid { grid-template-columns: 1fr 1fr; } }
+.code-card { border: 1px solid var(--border); border-radius: 16px; background: var(--bg-2); overflow: hidden; }
+.code-card .bar { display: flex; align-items: center; gap: 8px; padding: 12px 18px; border-bottom: 1px solid var(--border); background: var(--card); }
+.code-card .bar .dot { width: 11px; height: 11px; border-radius: 50%; background: var(--border-hi); }
+.code-card .bar .name { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-left: 8px; }
+.code-card pre { padding: 20px 22px; overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 1.85; color: var(--text); }
+.code-card pre .c { color: var(--faint); }
+.code-card pre .p { color: var(--primary); }
+.code-card pre .s { color: var(--scout); }
+.try-note { font-size: 14.5px; color: var(--muted); margin-top: 8px; }
+.try-note b { color: var(--text); }
+
+/* Video */
+.video-wrap {
+  margin-top: 52px; border: 1px solid var(--border); border-radius: 18px;
+  background: #000; overflow: hidden; line-height: 0;
+  box-shadow: 0 30px 70px -40px hsl(74 95% 63% / .35);
+}
+.video-wrap video { width: 100%; height: auto; display: block; aspect-ratio: 16 / 9; background: #000; }
+.video-cap { margin-top: 16px; text-align: center; font-size: 14.5px; color: var(--muted); line-height: 1.6; }
+.video-cap a { color: var(--primary); border-bottom: 1px solid hsl(74 95% 63% / .35); }
+.video-cap a:hover { border-bottom-color: var(--primary); }
+
+/* Stack */
+.stack-grid { display: grid; gap: 18px; margin-top: 52px; grid-template-columns: 1fr; }
+@media (min-width: 720px) { .stack-grid { grid-template-columns: repeat(3, 1fr); } }
+.stack-col h4 { font-family: var(--mono); font-size: 12px; letter-spacing: .16em; text-transform: uppercase; color: var(--primary); }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.chip { font-family: var(--mono); font-size: 12.5px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border); background: var(--card); color: var(--muted); }
+
+/* Footer */
+footer { border-top: 1px solid var(--border); padding: 72px 0 56px; }
+.foot-cta { max-width: 40ch; }
+.foot-cta h2 { font-size: clamp(28px, 4vw, 42px); }
+.foot-cta p { color: var(--muted); margin-top: 16px; }
+.foot-links { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 30px; }
+.foot-meta { margin-top: 56px; padding-top: 26px; border-top: 1px solid var(--border); display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; font-family: var(--mono); font-size: 12px; color: var(--faint); letter-spacing: .04em; }
+
+/* reveal on scroll */
+.rv { opacity: 0; transform: translateY(18px); transition: opacity .7s ease, transform .7s ease; }
+.rv.in { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) { .rv { opacity: 1; transform: none; transition: none; } }
+</style>
+</head>
+<body>
+
+<header class="nav" id="nav">
+  <div class="nav-inner">
+    <a class="brand" href="#top"><span class="brand-dot"></span><b>Job&nbsp;Agent</b></a>
+    <nav class="nav-links">
+      <a href="#agents">The crew</a>
+      <a href="#how">How it works</a>
+      <a href="#trust">Trust</a>
+      <a href="#try">Try it</a>
+    </nav>
+    <a class="nav-cta" href="https://github.com/mhju1988/job-agent-whs" target="_blank" rel="noopener">View code ↗</a>
+  </div>
+</header>
+
+<a id="top"></a>
+
+<!-- ————— HERO ————— -->
+<section class="hero">
+  <div class="wrap">
+    <p class="eyebrow rv">Multi-agent system · W-HS “Agentic AI” · Solo build</p>
+    <h1 class="rv">Four agents do the busywork.<br><span class="accent">You keep the click.</span></h1>
+    <p class="sub rv">Job Agent fetches listings, scores each one against your CV with vector search and an LLM, drafts a tailored cover letter and CV variant, and tracks every application through its lifecycle — <b>everything except the final human decision to apply.</b></p>
+    <div class="hero-actions rv">
+      <a class="btn btn-primary" href="#try">Run it locally</a>
+      <a class="btn btn-ghost" href="#agents">Meet the four agents</a>
+    </div>
+
+    <!-- Signature: the pipeline -->
+    <div class="pipeline rv" id="pipeline">
+      <div class="pipeline-label"><span>Follow one job through the crew</span><span>Scout → Matcher → Writer → Tracker → You</span></div>
+      <div class="flow" id="flow">
+        <div class="stage" data-agent style="--ac: var(--scout)"   data-cap="<b>Scout</b> pulls fresh roles from the Bundesagentur jobs API and dedupes them.">
+          <div class="stage-orb">◎</div><div class="stage-name">Scout</div><div class="stage-role">Finds &amp; normalizes jobs</div>
+        </div>
+        <div class="connector"></div>
+        <div class="stage" data-agent style="--ac: var(--matcher)" data-cap="<b>Matcher</b> ranks by pgvector cosine, then an LLM writes the gap analysis.">
+          <div class="stage-orb">▨</div><div class="stage-name">Matcher</div><div class="stage-role">Scores fit vs. your CV</div>
+        </div>
+        <div class="connector"></div>
+        <div class="stage" data-agent style="--ac: var(--writer)"  data-cap="<b>Writer</b> drafts a cover letter + CV variant and exports .docx files.">
+          <div class="stage-orb">✎</div><div class="stage-name">Writer</div><div class="stage-role">Drafts letter &amp; CV</div>
+        </div>
+        <div class="connector"></div>
+        <div class="stage" data-agent style="--ac: var(--tracker)" data-cap="<b>Tracker</b> moves the application through a forward-only state machine.">
+          <div class="stage-orb">◈</div><div class="stage-name">Tracker</div><div class="stage-role">Runs the lifecycle</div>
+        </div>
+        <div class="connector"></div>
+        <div class="stage you" data-cap="<b>You</b> review the draft and click Apply. The irreversible step stays human.">
+          <div class="stage-orb">▶</div><div class="stage-name">You</div><div class="stage-role">Review &amp; Apply</div>
+        </div>
+      </div>
+      <div class="flow-caption" id="flowCap">A shared, mockable core — every agent is a plain, dependency-injected Python class.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ————— WHY ————— -->
+<section class="band" id="why">
+  <div class="wrap">
+    <div class="band-head rv">
+      <p class="eyebrow">Why it exists</p>
+      <h2>Job hunting is a copy-paste loop.</h2>
+      <p class="lede">Searching, re-reading listings, rewriting the same letter, nudging the CV, remembering who you applied to. The repetitive 80% is exactly what software is good at — as long as the human keeps the 20% that actually matters.</p>
+    </div>
+    <div class="why-grid">
+      <div class="loop rv">
+        <div class="line strike"><span>1</span> search boards for the same role</div>
+        <div class="line strike"><span>2</span> re-read near-identical listings</div>
+        <div class="line strike"><span>3</span> rewrite the cover letter, again</div>
+        <div class="line strike"><span>4</span> tweak the CV to match keywords</div>
+        <div class="line strike"><span>5</span> log it in a spreadsheet somewhere</div>
+        <div class="line arrow">↳ automated — you just review &amp; click Apply</div>
+      </div>
+      <div class="goals rv">
+        <div class="goal"><h4>Keep the human in control</h4><p>No auto-submit, ever. The agent stops at “ready to send.”</p></div>
+        <div class="goal"><h4>Never invent a credential</h4><p>The LLM can rephrase, but grounding guards forbid it from claiming a skill you don't have.</p></div>
+        <div class="goal"><h4>Run on a student budget</h4><p>Free academic LLM endpoint, a public jobs API, and Supabase's free tier. No paid APIs anywhere.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ————— AGENTS ————— -->
+<section class="band" id="agents">
+  <div class="wrap">
+    <div class="band-head rv">
+      <p class="eyebrow">The crew</p>
+      <h2>Four focused agents, one clear job each.</h2>
+      <p class="lede">Cooperating single-responsibility classes built with dependency injection — CrewAI in spirit, plain testable Python in practice. Each hands its output to the next.</p>
+    </div>
+    <div class="agents">
+      <article class="agent rv" data-a="scout">
+        <div class="tag"><span class="mark">◎</span><div><div class="n">01 · SCOUT</div><h3>The Scout</h3></div></div>
+        <p>Fetches and normalizes job listings from the Bundesagentur für Arbeit API (JSearch as optional fallback), dedupes them, and persists to a shared pool.</p>
+        <div class="io"><b>search prefs</b> → <b>jobs</b></div>
+      </article>
+      <article class="agent rv" data-a="matcher">
+        <div class="tag"><span class="mark">▨</span><div><div class="n">02 · MATCHER</div><h3>The Matcher</h3></div></div>
+        <p>Two-stage retrieval: cheap pgvector cosine similarity narrows hundreds of jobs to a top-N, then a per-job LLM writes the score, matched skills, and gaps.</p>
+        <div class="io"><b>profile + jobs</b> → <b>match scores</b></div>
+      </article>
+      <article class="agent rv" data-a="writer">
+        <div class="tag"><span class="mark">✎</span><div><div class="n">03 · WRITER</div><h3>The Writer</h3></div></div>
+        <p>Generates a tailored cover letter (EN/DE) and a CV variant, then exports both as <code>.docx</code>. Highlighted skills are a strict subset of your real ones.</p>
+        <div class="io"><b>top match</b> → <b>application + files</b></div>
+      </article>
+      <article class="agent rv" data-a="tracker">
+        <div class="tag"><span class="mark">◈</span><div><div class="n">04 · TRACKER</div><h3>The Tracker</h3></div></div>
+        <p>Enforces a forward-only lifecycle state machine, schedules 7-day follow-ups, and owns the GDPR right-to-erasure that wipes your data and artifacts.</p>
+        <div class="io"><b>status change</b> → <b>updated application</b></div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ————— HOW ————— -->
+<section class="band" id="how">
+  <div class="wrap">
+    <div class="band-head rv">
+      <p class="eyebrow">How it works</p>
+      <h2>The decisions that keep an LLM honest.</h2>
+      <p class="lede">A Next.js frontend and a FastAPI backend over the agent core, with Supabase (Postgres + pgvector) for storage and auth. Five design choices do the heavy lifting.</p>
+    </div>
+    <div class="principles">
+      <div class="principle rv">
+        <div class="k">Typed I/O</div>
+        <div><h3>Every LLM response is a strict Pydantic schema</h3><p>With <code>extra="forbid"</code>, the model physically cannot inject stray fields. Bad output fails fast at the boundary, not three layers deep.</p></div>
+      </div>
+      <div class="principle rv">
+        <div class="k">Two-stage match</div>
+        <div><h3>Cheap vector search before expensive LLM judgment</h3><p>pgvector cosine similarity runs in-database to shortlist a top-N; the costly per-job gap analysis only runs on the survivors. Token economy by construction.</p></div>
+      </div>
+      <div class="principle rv">
+        <div class="k">Grounding guard</div>
+        <div><h3>Highlighted skills must be a strict subset of your CV</h3><p>The CV-variant tool enforces <code>set(highlighted) ⊆ profile.skills</code>. The LLM can reorder and emphasize but can never fabricate a credential — the single most important safety property in the system.</p></div>
+      </div>
+      <div class="principle rv">
+        <div class="k">JSON discipline</div>
+        <div><h3>A shared preamble + fence stripper on every parsed prompt</h3><p>Each prompt whose response is parsed prepends a <code>JSON_ONLY_PREAMBLE</code>; responses pass a fence stripper and parse with <code>strict=False</code>, because LLMs emit raw control characters in prose.</p></div>
+      </div>
+      <div class="principle rv">
+        <div class="k">Injected deps</div>
+        <div><h3>Dependency injection everywhere → 100% mockable tests</h3><p>The full suite makes zero live calls; the LLM and scraper are always injected fakes. A demo is reproducible without the live endpoint.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ————— TRUST ————— -->
+<section class="band" id="trust">
+  <div class="wrap">
+    <div class="band-head rv">
+      <p class="eyebrow">Trust &amp; control</p>
+      <h2>Helpful with words — strict with facts.</h2>
+      <p class="lede">GDPR and platform terms of service are first-class constraints, not an afterthought bolted on at the end.</p>
+    </div>
+    <div class="trust">
+      <div class="tcard rv"><div class="ic">✋</div><h4>No auto-submit</h4><p>The agent never files an application. It produces artifacts and a “ready to send” state; you click Apply on the real job page yourself.</p></div>
+      <div class="tcard rv"><div class="ic">⌦</div><h4>Right to erasure</h4><p>One call wipes your profile, scores, applications, and every generated <code>.docx</code> from disk. Deleting your account cascades the same rows.</p></div>
+      <div class="tcard rv"><div class="ic">🔒</div><h4>Row-level isolation</h4><p>Postgres RLS binds every request to your JWT, so the database — not just the app — guarantees you only ever see your own data.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ————— TRY IT ————— -->
+<section class="band" id="try">
+  <div class="wrap">
+    <div class="band-head rv">
+      <p class="eyebrow">Try it</p>
+      <h2>Two commands to a running stack.</h2>
+      <p class="lede">Bring your own Supabase project and a GWDG API key (both free-tier), then start it with Docker Compose or run the two services directly.</p>
+    </div>
+    <div class="try-grid">
+      <div>
+        <div class="code-card rv">
+          <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="name">docker · fastest</span></div>
+          <pre><span class="c"># 1 · set Supabase + GWDG keys in .env</span>
+cp .env.example .env
+
+<span class="c"># 2 · build & start both services</span>
+<span class="p">docker compose</span> up -d --build
+
+<span class="c"># open the app</span>
+<span class="s">→</span> http://localhost:3000</pre>
+        </div>
+        <p class="try-note rv"><b>api</b> (FastAPI :8000) + <b>web</b> (Next.js :3000), the same two-service layout used in deployment.</p>
+      </div>
+      <div>
+        <div class="code-card rv">
+          <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="name">local dev · without docker</span></div>
+          <pre><span class="c"># backend</span>
+uv sync
+<span class="p">uv run</span> uvicorn job_agent.api.main:app
+
+<span class="c"># frontend</span>
+cd frontend &amp;&amp; npm install
+<span class="p">npm run</span> dev
+
+<span class="c"># tests — all mocked, zero live calls</span>
+<span class="p">uv run</span> pytest -q</pre>
+        </div>
+        <p class="try-note rv">Migrations <b>001–020</b> apply once in the Supabase SQL editor. Full steps in the repo <b>README</b> and <b>DEPLOY.md</b>.</p>
+      </div>
+    </div>
+
+    <div class="video-wrap rv" id="video">
+      <video controls preload="metadata" poster="poster.jpg" playsinline>
+        <source src="walkthrough.mp4" type="video/mp4">
+        Your browser can’t play embedded video — <a href="walkthrough.mp4">download the walkthrough</a> instead.
+      </video>
+    </div>
+    <p class="video-cap rv">The whole loop in about a minute and a half — CV upload, Scout, Matcher scores, a generated letter, and the Tracker.<br>
+      <a href="https://github.com/mhju1988/job-agent-whs/releases/download/final/job-agent-walkthrough.mp4">Download full quality (1080p)</a></p>
+  </div>
+</section>
+
+<!-- ————— STACK ————— -->
+<section class="band" id="stack">
+  <div class="wrap">
+    <div class="band-head rv">
+      <p class="eyebrow">Under the hood</p>
+      <h2>Free-tier and academic infrastructure, end to end.</h2>
+    </div>
+    <div class="stack-grid">
+      <div class="stack-col rv"><h4>Backend</h4><div class="chips"><span class="chip">Python 3.11</span><span class="chip">FastAPI</span><span class="chip">Pydantic v2</span><span class="chip">langchain-openai</span><span class="chip">pgvector</span><span class="chip">python-docx</span><span class="chip">Jinja2</span><span class="chip">uv</span></div></div>
+      <div class="stack-col rv"><h4>Frontend</h4><div class="chips"><span class="chip">Next.js 14</span><span class="chip">React 18</span><span class="chip">TypeScript</span><span class="chip">Tailwind</span><span class="chip">shadcn/ui</span><span class="chip">TanStack Query</span><span class="chip">SSE</span></div></div>
+      <div class="stack-col rv"><h4>Platform</h4><div class="chips"><span class="chip">Supabase Auth + RLS</span><span class="chip">Postgres</span><span class="chip">GWDG LLM endpoint</span><span class="chip">Bundesagentur API</span><span class="chip">Docker</span></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ————— FOOTER ————— -->
+<footer>
+  <div class="wrap">
+    <div class="foot-cta rv">
+      <p class="eyebrow">See the build</p>
+      <h2>Read the code, or run the whole loop.</h2>
+      <p>Clean repo, full setup instructions, migrations, and Docker-Compose deployment — everything a visitor needs to understand what it does and try it.</p>
+      <div class="foot-links">
+        <a class="btn btn-primary" href="https://github.com/mhju1988/job-agent-whs" target="_blank" rel="noopener">Code repository ↗</a>
+        <a class="btn btn-ghost" href="pitch_deck.pdf">Pitch deck (PDF)</a>
+        <a class="btn btn-ghost" href="#try">Run it locally</a>
+      </div>
+    </div>
+    <div class="foot-meta">
+      <span>Automated Job Application Agent · Project #7</span>
+      <span>W-HS · Agentic AI · 2026</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function () {
+  // nav border on scroll
+  var nav = document.getElementById('nav');
+  var onScroll = function () { nav.classList.toggle('scrolled', window.scrollY > 8); };
+  onScroll(); window.addEventListener('scroll', onScroll, { passive: true });
+
+  // reveal on scroll
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduce) {
+    document.querySelectorAll('.rv').forEach(function (el) { el.classList.add('in'); });
+  } else {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
+    }, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' });
+    document.querySelectorAll('.rv').forEach(function (el) { io.observe(el); });
+  }
+
+  // pipeline animation
+  var stages = Array.prototype.slice.call(document.querySelectorAll('#flow .stage'));
+  var connectors = Array.prototype.slice.call(document.querySelectorAll('#flow .connector'));
+  var cap = document.getElementById('flowCap');
+  var defaultCap = cap.innerHTML;
+  var step = 0, timer = null;
+
+  function clearAll() {
+    stages.forEach(function (s) { s.classList.remove('lit'); });
+    connectors.forEach(function (c) { c.classList.remove('on'); });
+  }
+  function tick() {
+    if (step >= stages.length) {
+      // brief pause on the human step, then reset
+      cap.innerHTML = stages[stages.length - 1].getAttribute('data-cap');
+      step = 0;
+      timer = setTimeout(function () { clearAll(); cap.innerHTML = defaultCap; timer = setTimeout(tick, 700); }, 1900);
+      return;
+    }
+    if (step > 0 && connectors[step - 1]) connectors[step - 1].classList.add('on');
+    var s = stages[step];
+    s.classList.add('lit');
+    cap.innerHTML = s.getAttribute('data-cap');
+    step++;
+    timer = setTimeout(tick, 1250);
+  }
+
+  if (!reduce) {
+    var started = false;
+    var pio = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting && !started) { started = true; timer = setTimeout(tick, 600); }
+      });
+    }, { threshold: 0.3 });
+    pio.observe(document.getElementById('pipeline'));
+  } else {
+    // reduced motion: show the finished state
+    stages.forEach(function (s) { s.classList.add('lit'); });
+    connectors.forEach(function (c) { c.classList.add('on'); });
+  }
+
+  // let hovering a stage take over the caption
+  stages.forEach(function (s) {
+    s.addEventListener('mouseenter', function () {
+      if (timer) { clearTimeout(timer); }
+      clearAll(); s.classList.add('lit');
+      var idx = stages.indexOf(s);
+      for (var i = 0; i < idx; i++) { if (connectors[i]) connectors[i].classList.add('on'); }
+      cap.innerHTML = s.getAttribute('data-cap');
+    });
+  });
+  var flow = document.getElementById('flow');
+  flow.addEventListener('mouseleave', function () {
+    if (reduce) return;
+    clearAll(); cap.innerHTML = defaultCap; step = 0; timer = setTimeout(tick, 500);
+  });
+})();
+</script>
+</body>
+</html>

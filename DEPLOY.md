@@ -2,32 +2,42 @@
 
 ## Prerequisites
 
-- Railway CLI installed (`npm install -g @railway/cli`) or Railway dashboard access
-- Supabase project already provisioned with migrations 001–019 applied
+- Railway dashboard access (or the CLI: `npm install -g @railway/cli`)
+- Supabase project already provisioned with migrations 001–021 applied
 - GWDG API key available
 
 ---
 
 ## 1. Railway Project Setup
 
-### Option A — Railway CLI (local deploy, no GitHub required)
+### Option A — GitHub-connected (recommended)
+
+Connect each service to this repository so every push to `main` redeploys automatically.
+
+Create **two** services in the Railway dashboard, both pointing at the same repo and branch:
+
+| Service | Root directory | Dockerfile | Healthcheck |
+|---|---|---|---|
+| `api` | `/` (repo root) | `Dockerfile` | `/api/health` |
+| `web` | `frontend/` | `Dockerfile` | `/` |
+
+> **Set these three fields per service in the dashboard.** `railway.json` describes the
+> intended layout, but Railway's config file applies to a single service — it will not
+> create or configure both services for you.
+
+### Option B — Railway CLI (local snapshot, no GitHub)
 
 ```sh
 railway login
 railway init          # create new project
-railway up            # deploy from local repo
+railway up            # uploads the current directory
 ```
 
-### Option B — GitHub-connected (requires private repo)
-
-> This private dev tree is never pushed publicly. If using GitHub-connected deploys,
-> push to a **private** GitHub repo first. Do not use the public `mhju1988/job-agent-whs`.
-
-Create two services in the Railway dashboard:
-- **api**: root directory = `/` (repo root), Dockerfile = `Dockerfile`
-- **web**: root directory = `frontend/`, Dockerfile = `Dockerfile`
-
-`railway.json` at the repo root configures both services automatically.
+> **`railway up` deploys a snapshot of your local folder, not a git commit.** Nothing is
+> linked to a repository, so pushing to GitHub will not redeploy, and the dashboard's
+> "Redeploy" button replays the *last uploaded snapshot* rather than fetching newer code.
+> To ship a change you must run `railway up` again. Add a `.railwayignore` first, or the
+> upload includes every untracked file in the directory. Prefer Option A.
 
 ---
 
@@ -118,11 +128,40 @@ After you have the deployed frontend URL, update the Supabase dashboard:
 3. Add the same URL to **Redirect URLs**
 
 This is required for Supabase Auth email magic links and OAuth redirects to work from the
-deployed app.
+deployed app. Add `https://<web-domain>.up.railway.app/callback` to **Redirect URLs** too, so
+the email-confirmation callback page resolves.
 
 ---
 
-## 7. SSE / Long-Running Requests
+## 7. Enabling the Admin Area
+
+Deploying the code is not enough — the `/admin` area stays invisible until both of these are
+done **against the Supabase project this deployment points at**:
+
+1. **Apply migration `021_rbac_admin.sql`** in the Supabase SQL editor. It creates
+   `admin_audit_log`; without it every admin action still works but the audit write is
+   skipped (it is deliberately best-effort).
+2. **Promote an account.** Roles live in `app_metadata.role`, which only the service-role
+   key can write — there is no self-service path to admin:
+   ```sh
+   uv run python scripts/promote_admin.py you@example.com
+   ```
+   Then **sign out and back in**: the role is read from the JWT, so an existing session
+   keeps the old claim until it is reissued.
+
+Two things that silently produce "the admin area does not exist":
+
+- **Signing in with an account that has no role.** The nav entry and the route guard both
+  read the same claim, so a regular account sees no trace of it. Check with
+  `db.raw.auth.admin.list_users()` and look at each user's `app_metadata`.
+- **`SUPABASE_KEY` set to the anon key instead of the service-role key.** Admin routes read
+  and write through the service-role client (`get_admin_db`), because owner-scoped RLS would
+  otherwise hide other users from an admin. With the anon key the routes exist but every
+  admin call fails.
+
+---
+
+## 8. SSE / Long-Running Requests
 
 The Matcher agent runs use Server-Sent Events and can stay open for several minutes.
 
@@ -133,7 +172,7 @@ The Matcher agent runs use Server-Sent Events and can stay open for several minu
 
 ---
 
-## 8. Healthchecks
+## 9. Healthchecks
 
 | Service | Healthcheck path | Expected |
 |---|---|---|
@@ -142,7 +181,7 @@ The Matcher agent runs use Server-Sent Events and can stay open for several minu
 
 ---
 
-## 9. Rollback
+## 10. Rollback
 
 Via Railway CLI:
 ```sh
@@ -154,7 +193,7 @@ Via dashboard: Railway → service → Deployments → click a prior deployment 
 
 ---
 
-## 10. Logs
+## 11. Logs
 
 ```sh
 railway logs --service api

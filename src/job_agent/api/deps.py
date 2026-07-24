@@ -22,10 +22,11 @@ _ASYMMETRIC_ALGS = ["ES256", "RS256", "EdDSA"]
 
 @dataclass
 class CurrentUser:
-    """The authenticated caller: their Supabase user id and raw access token."""
+    """The authenticated caller: their Supabase user id, raw access token, and role."""
 
     user_id: str
     token: str
+    role: str = "user"
 
 
 @lru_cache(maxsize=4)
@@ -34,8 +35,8 @@ def _jwks_client(jwks_url: str) -> PyJWKClient:
     return PyJWKClient(jwks_url)
 
 
-def _decode_token(token: str, settings: Settings) -> str:
-    """Verify a Supabase access token and return its ``sub`` (user id).
+def _decode_claims(token: str, settings: Settings) -> dict[str, Any]:
+    """Verify a Supabase access token and return its full claim set.
 
     Tokens carry ``aud="authenticated"``. HS256 tokens are verified against
     ``supabase_jwt_secret``; asymmetric tokens against the project JWKS at
@@ -75,11 +76,23 @@ def _decode_token(token: str, settings: Settings) -> str:
         raise
     except jwt.PyJWTError as exc:
         raise HTTPException(status_code=401, detail="Invalid or expired token") from exc
+    return claims
 
+
+def _decode_token(token: str, settings: Settings) -> str:
+    """Verify a Supabase access token and return its ``sub`` (user id)."""
+    claims = _decode_claims(token, settings)
     sub = claims.get("sub")
     if not sub:
         raise HTTPException(status_code=401, detail="Token missing subject")
     return str(sub)
+
+
+def _role_from_claims(claims: dict[str, Any]) -> str:
+    app_metadata = claims.get("app_metadata")
+    if isinstance(app_metadata, dict) and app_metadata.get("role") == "admin":
+        return "admin"
+    return "user"
 
 
 def get_current_user(
@@ -90,10 +103,30 @@ def get_current_user(
     if not authorization.lower().startswith("bearer "):
         raise HTTPException(status_code=401, detail="Missing bearer token")
     token = authorization[7:].strip()
-    user_id = _decode_token(token, settings)
-    return CurrentUser(user_id=user_id, token=token)
+    claims = _decode_claims(token, settings)
+    sub = claims.get("sub")
+    if not sub:
+        raise HTTPException(status_code=401, detail="Token missing subject")
+    return CurrentUser(user_id=str(sub), token=token, role=_role_from_claims(claims))
+
+
+def require_admin(user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
+    """Gate access to admin-only endpoints. Raises 403 for non-admin callers."""
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return user
 
 
 def get_user_db(user: CurrentUser = Depends(get_current_user)) -> SupabaseClient:
     """Per-request RLS-bound Supabase client for the authenticated user."""
     return SupabaseClient.for_user(user.token)
+
+
+def get_admin_db(_admin: CurrentUser = Depends(require_admin)) -> SupabaseClient:
+    """Service-role Supabase client for admin-only cross-user operations.
+
+    Owner-scoped RLS means an admin viewing another user's data is never the
+    row owner, so admin reads/writes must go through the service-role client
+    (bypasses RLS). Authorization is enforced once, here, by ``require_admin``.
+    """
+    return SupabaseClient()

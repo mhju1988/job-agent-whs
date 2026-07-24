@@ -171,3 +171,12 @@ export interface SearchSuggestion {
   location: string | null;
   rationale: string | null;
 }
+
+export interface AdminUser {
+  id: string;
+  email: string | null;
+  created_at: string;
+  email_confirmed: boolean;
+  banned: boolean;
+  role: string;
+}

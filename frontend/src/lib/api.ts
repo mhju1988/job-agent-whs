@@ -1,5 +1,6 @@
 import { ENV } from "./env";
 import type {
+  AdminUser,
   Application,
   ApplicationStatus,
   DeleteSummary,
@@ -99,6 +100,22 @@ export const api = {
   getRuns: () => apiFetch<ObsRun[]>("/api/observability/runs"),
   getRunEvents: (runId: string) =>
     apiFetch<ObsEvent[]>(`/api/observability/runs/${runId}/events`),
+  getAdminUsers: () => apiFetch<AdminUser[]>("/api/admin/users"),
+  banUser: (id: string) => apiFetch<{ ok: boolean }>(`/api/admin/users/${id}/ban`, { method: "POST" }),
+  unbanUser: (id: string) => apiFetch<{ ok: boolean }>(`/api/admin/users/${id}/unban`, { method: "POST" }),
+  confirmUserEmail: (id: string) =>
+    apiFetch<{ ok: boolean }>(`/api/admin/users/${id}/confirm-email`, { method: "POST" }),
+  setUserRole: (id: string, role: "user" | "admin") =>
+    apiFetch<{ ok: boolean }>(`/api/admin/users/${id}/role`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role }),
+    }),
+  getUserApplications: (id: string) =>
+    apiFetch<Application[]>(`/api/admin/users/${id}/applications`),
+  deleteJobAdmin: (id: string) =>
+    apiFetch<{ ok: boolean }>(`/api/admin/jobs/${id}`, { method: "DELETE" }),
+  getAdminObservabilitySummary: () => apiFetch<ObsRun[]>("/api/admin/observability/summary"),
   /** Absolute URL for a document download (caller appends auth via fetch/anchor). */
   documentUrl: (id: string, kind: "cover" | "cv") =>
     `${ENV.apiBaseUrl}/api/applications/${id}/documents/${kind}`,

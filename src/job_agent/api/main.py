@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from job_agent.api.routers import (
+    admin,
     applications,
     data,
     jobs,
@@ -38,6 +39,7 @@ def create_app() -> FastAPI:
         data,
         observability,
         search,
+        admin,
     ):
         app.include_router(module.router, prefix="/api")
     return app

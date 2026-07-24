@@ -15,6 +15,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -26,6 +27,21 @@ export default function LoginPage() {
       return;
     }
     router.replace("/");
+  }
+
+  async function onResendConfirmation() {
+    if (!email) {
+      toast.error("Enter your email above first.");
+      return;
+    }
+    setResending(true);
+    const { error } = await supabase.auth.resend({ type: "signup", email });
+    setResending(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success("Confirmation email sent — check your inbox.");
   }
 
   return (
@@ -59,6 +75,14 @@ export default function LoginPage() {
           {loading ? "Signing in…" : "Sign in"}
         </Button>
       </form>
+      <button
+        type="button"
+        onClick={() => void onResendConfirmation()}
+        disabled={resending}
+        className="mt-4 w-full text-center text-xs text-muted-foreground hover:underline"
+      >
+        {resending ? "Sending…" : "Resend confirmation email"}
+      </button>
       <p className="mt-6 text-center text-sm text-muted-foreground">
         No account?{" "}
         <Link href="/signup" className="font-medium text-primary hover:underline">

@@ -11,6 +11,7 @@ import {
   Menu,
   Network,
   Search,
+  ShieldCheck,
   Send,
   Sparkles,
   UserRound,
@@ -58,11 +59,18 @@ function navLinkClass(active: boolean) {
 
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
+  const { isAdmin } = useSession();
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
+  const groups = isAdmin
+    ? [
+        ...NAV_GROUPS,
+        { title: "Admin", items: [{ href: "/admin", label: "Admin", icon: ShieldCheck }] },
+      ]
+    : NAV_GROUPS;
   return (
     <nav className="flex flex-1 flex-col gap-4">
-      {NAV_GROUPS.map((group, gi) => (
+      {groups.map((group, gi) => (
         <div key={group.title ?? `group-${gi}`} className="flex flex-col gap-1">
           {group.title && (
             <span className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">

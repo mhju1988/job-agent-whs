@@ -72,3 +72,50 @@ def test_decode_es256_token_via_jwks(monkeypatch) -> None:
 
     s = Settings(supabase_url="https://proj.supabase.co", supabase_jwt_secret="")
     assert _decode_token(es_token, s) == "u-7"
+
+
+def test_get_current_user_defaults_role_to_user(monkeypatch) -> None:
+    from job_agent.api import deps
+
+    monkeypatch.setattr(deps, "_decode_claims", lambda _t, _s: {"sub": "u-1"})
+    user = deps.get_current_user(authorization="Bearer tok", settings=Settings())
+    assert user.role == "user"
+
+
+def test_get_current_user_reads_admin_role_from_app_metadata(monkeypatch) -> None:
+    from job_agent.api import deps
+
+    monkeypatch.setattr(
+        deps,
+        "_decode_claims",
+        lambda _t, _s: {"sub": "u-1", "app_metadata": {"role": "admin"}},
+    )
+    user = deps.get_current_user(authorization="Bearer tok", settings=Settings())
+    assert user.role == "admin"
+
+
+def test_get_current_user_ignores_non_admin_role_values(monkeypatch) -> None:
+    from job_agent.api import deps
+
+    monkeypatch.setattr(
+        deps,
+        "_decode_claims",
+        lambda _t, _s: {"sub": "u-1", "app_metadata": {"role": "superuser"}},
+    )
+    user = deps.get_current_user(authorization="Bearer tok", settings=Settings())
+    assert user.role == "user"
+
+
+def test_require_admin_passes_through_admin() -> None:
+    from job_agent.api.deps import CurrentUser, require_admin
+
+    admin = CurrentUser(user_id="u-1", token="t", role="admin")
+    assert require_admin(user=admin) is admin
+
+
+def test_require_admin_rejects_regular_user() -> None:
+    from job_agent.api.deps import CurrentUser, require_admin
+
+    with pytest.raises(HTTPException) as ei:
+        require_admin(user=CurrentUser(user_id="u-1", token="t", role="user"))
+    assert ei.value.status_code == 403

@@ -4,10 +4,12 @@ import { createContext, useContext, useEffect, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { setAuthToken } from "@/lib/api";
+import { isAdmin } from "@/lib/role";
 
 interface SessionState {
   session: Session | null;
   user: User | null;
+  isAdmin: boolean;
   loading: boolean;
   signOut: () => Promise<void>;
 }
@@ -38,7 +40,13 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <SessionContext.Provider
-      value={{ session, user: session?.user ?? null, loading, signOut }}
+      value={{
+        session,
+        user: session?.user ?? null,
+        isAdmin: isAdmin(session?.user ?? null),
+        loading,
+        signOut,
+      }}
     >
       {children}
     </SessionContext.Provider>

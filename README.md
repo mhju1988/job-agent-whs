@@ -64,11 +64,18 @@ ARTIFACTS_DIR=artifacts
 ```
 
 ### 4. Apply Supabase migrations
-Open the Supabase SQL Editor and run each file in `src/job_agent/db/migrations/` in numeric order (001 → 020). The `supabase-py` client cannot run DDL, so this is manual.
+Open the Supabase SQL Editor and run each file in `src/job_agent/db/migrations/` in numeric order (001 → 021). The `supabase-py` client cannot run DDL, so this is manual.
 
-### 5. Verify
+### 5. Create the first admin (optional)
+Roles live in Supabase `app_metadata.role`, which only the service-role key can write — there is deliberately **no self-service path to admin**. After signing up a normal account, promote it once from the command line:
 ```powershell
-uv run pytest -q          # 338 tests, all mocked, no live calls
+uv run python scripts/promote_admin.py you@example.com
+```
+Sign out and back in so the new claim lands in your JWT.
+
+### 6. Verify
+```powershell
+uv run pytest -q          # 359 tests, all mocked, no live calls
 uv run ruff check src/ tests/
 uv run mypy src/
 ```
@@ -92,9 +99,11 @@ npm install                                   # first time
 copy .env.local.example .env.local            # fill in NEXT_PUBLIC_* (Supabase URL + anon key + API base)
 npm run dev                                   # http://localhost:3000
 ```
-Sign in (create a user in the Supabase dashboard → Authentication), then: Dashboard · Jobs (run Scout) · Matches (prepare application) · Applications (kanban pipeline) · Profile (CV upload + GDPR delete) · Observability. Long agent runs stream live progress in the run drawer (SSE). The bold "command-center" design system is previewed at `/styleguide`.
+Sign up at `/signup` (or create a user in the Supabase dashboard → Authentication), then: Dashboard · Jobs (run Scout) · Matches (prepare application) · Applications (kanban pipeline) · Profile (CV upload + GDPR delete) · Observability. Long agent runs stream live progress in the run drawer (SSE). The bold "command-center" design system is previewed at `/styleguide`.
 
-> Auth note: the API verifies Supabase access tokens — **ES256** (the newer asymmetric signing keys) via JWKS automatically, or **HS256** via `SUPABASE_JWT_SECRET`. The per-request DB client is bound to the caller's JWT so Postgres RLS enforces per-user isolation.
+Accounts promoted to **admin** additionally see `/admin`: user management (ban · unban · confirm email · change role), a read-only view of any user's applications, job moderation (delete bad or duplicate listings from the shared pool), and a cross-user ops summary. Every admin action is written to an `admin_audit_log` row.
+
+> Auth note: the API verifies Supabase access tokens — **ES256** (the newer asymmetric signing keys) via JWKS automatically, or **HS256** via `SUPABASE_JWT_SECRET`. The per-request DB client is bound to the caller's JWT so Postgres RLS enforces per-user isolation. Admin routes sit behind a `require_admin` dependency that reads `app_metadata.role` off the verified JWT; admin-only DB work uses the service-role client.
 
 **End-to-end CLI demo** (pipeline without the UI):
 ```powershell
@@ -163,8 +172,9 @@ new → ready_to_send → applied → interview → offer
 | **5** | Tracker Agent + Streamlit UI (later removed) + demo | `agents/tracker_agent.py`, `scripts/sprint5_demo.py` |
 | **Post** | Multi-tenancy · FastAPI backend · Next.js frontend · observability · SSE live progress | `src/job_agent/api/`, `frontend/`, migrations 008–016 |
 | **Post** | Jobs page redesign · Matcher explicit job_ids · cached suggestions · LLM timeout | `frontend/src/app/(app)/jobs/page.tsx`, `agents/matcher_agent.py`, `config.py` |
+| **Post** | RBAC admin/user roles · audit log · job moderation · signup/login hardening | `api/routers/admin.py`, `api/deps.py`, `services/admin_audit.py`, `frontend/src/app/(admin)/`, migration 021 |
 
-Final state: **338 tests green**, ruff + mypy clean, frontend tsc clean.
+Final state: **359 backend tests green** (plus 175 frontend), ruff + mypy clean, frontend tsc clean.
 
 ---
 
@@ -180,7 +190,7 @@ Final state: **338 tests green**, ruff + mypy clean, frontend tsc clean.
 - **Job sources** — Arbeitsagentur is primary (no key). JSearch/RapidAPI is optional (set `RAPIDAPI_KEY`). Adzuna is evaluated in `docs/sources.md` but not wired.
 - **No auto-submit by design** — applications are never submitted programmatically. The user opens the job URL, applies manually, then clicks "Mark Applied" in the dashboard. This is a deliberate GDPR + ToS choice documented in `docs/legal.md` §2.4.
 - **StepStone, LinkedIn, Indeed excluded** — robots.txt / ToS forbid scraping; we use the API-friendly Arbeitsagentur instead.
-- **Multi-user** — Supabase Auth + per-user `user_id` + Row-Level Security isolate each user's profile, matches, and applications; jobs are a shared global pool. Runs locally by default (API on `:8000`, web on `:3000`); not yet hardened for public hosting.
+- **Multi-user** — Supabase Auth + per-user `user_id` + Row-Level Security isolate each user's profile, matches, and applications; jobs are a shared global pool moderated by admins. Two roles only (`user` / `admin`) — there is no group, org, or per-resource permission model. Runs locally by default (API on `:8000`, web on `:3000`); not yet hardened for public hosting.
 - **90-day retention on jobs + match_scores**, enforced nightly by `purge_expired_data()` scheduled via pg_cron (migration 018); applications kept lifetime-of-project with snapshot fields so they survive the purge.
 
 ---

@@ -93,3 +93,20 @@ class DeleteApplicationsRequest(_S):
 class DeleteApplicationsResponse(_S):
     deleted: int
     files_deleted: int
+
+
+class AdminUserResponse(_S):
+    id: str
+    email: str | None
+    created_at: str
+    email_confirmed: bool
+    banned: bool
+    role: str
+
+
+class AdminRoleRequest(_S):
+    role: Literal["user", "admin"]
+
+
+class AdminActionResponse(_S):
+    ok: bool = True
